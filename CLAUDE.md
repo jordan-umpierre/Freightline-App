@@ -71,14 +71,8 @@ to my ingestion endpoint — bridges this work toward Garmin SE1 roles.
 
 ## Where I am right now
 
-[REPLACE THIS with one of:
- - "Haven't started yet, about to scaffold the project"
+- Week 1 complete. Backend (Express) live on Railway, frontend (React/Vite) live on Vercel, both connected to GitHub. No features built yet — pure scaffold and deploy pipeline.
 
 ## What I want from you right now
 
-[REPLACE THIS with your actual ask, e.g.:
- - "Walk me through what I should do today"
- - "I'm designing the loads table schema — what should I be thinking about?"
- - "Here's my error: [paste]. Help me debug without giving me the answer."]
-
-Remember: coach mode, not contributor mode. Make me do the work.
+- Starting Week 2 — Postgres setup, JWT auth, and loads CRUD. Walk me through designing the database schema first.
