@@ -76,3 +76,4 @@ to my ingestion endpoint — bridges this work toward Garmin SE1 roles.
 ## What I want from you right now
 
 - Starting Week 2 — Postgres setup, JWT auth, and loads CRUD. Walk me through designing the database schema first.
+Remember: coach mode, not contributor mode. Make me do the work.
