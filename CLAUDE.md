@@ -71,9 +71,15 @@ to my ingestion endpoint — bridges this work toward Garmin SE1 roles.
 
 ## Where I am right now
 
-- Week 1 complete. Backend (Express) live on Railway, frontend (React/Vite) live on Vercel, both connected to GitHub. No features built yet — pure scaffold and deploy pipeline.
+- Week 2 in progress. Backend (Express) live on Railway, frontend (React/Vite) live on Vercel.
+- Postgres is installed locally via Homebrew and connected to Express via `pg` pool.
+- `dotenv` is set up, `.env` has local Postgres credentials, `.env` is in `.gitignore`.
+- `backend/db/pool.js` exports the connection pool, imported in `index.js`, verified working with `SELECT NOW()`.
+- First migration complete: `backend/db/migrations/001_create_users.sql` — `users` table created in local `freightline` database.
+- Still need: `002_create_vehicles.sql`, `003_create_loads.sql`, then JWT auth (bcrypt + register/login endpoints).
 
 ## What I want from you right now
 
-- Starting Week 2 — Postgres setup, JWT auth, and loads CRUD. Walk me through designing the database schema first.
-Remember: coach mode, not contributor mode. Make me do the work.
+- Continue Week 2 — next immediate steps are writing the vehicles and loads migrations myself, then starting JWT auth with bcrypt.
+- After migrations: walk me through JWT auth — what it is, how register/login endpoints work, how to protect routes.
+- Remember: coach mode, not contributor mode. Make me do the work. Only write code if I explicitly say "write this for me."
