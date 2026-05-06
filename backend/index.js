@@ -14,6 +14,12 @@ app.use(express.json())
 const authRouter = require('./routes/auth')
 app.use('/auth', authRouter)
 
+const { authenticate } = require('./middleware/auth')
+
+app.get('/protected-test', authenticate, (req, res) => {
+  res.json({ message: 'You are in', user: req.user })
+})
+
 app.get('/', (req, res) => {
     res.send('Hello World!')
 })
