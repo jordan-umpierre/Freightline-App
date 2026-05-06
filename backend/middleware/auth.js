@@ -27,4 +27,18 @@ function authenticate(req, res, next) {
   }
 }
 
-module.exports = { authenticate };
+// Middleware factory that restricts access to routes by role.
+// Usage: router.get('/admin', authenticate, authorize(['admin']), handler)
+// Must run AFTER authenticate so req.user is already populated.
+const authorize = (roles) => {
+  return (req, res, next) => {
+    // roles.includes() checks whether the user's role is in the allowed list
+    if (!roles.includes(req.user.role)) {
+      // 403 Forbidden — authenticated but not permitted
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+  };
+};
+
+module.exports = { authenticate, authorize };
