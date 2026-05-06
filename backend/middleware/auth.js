@@ -31,7 +31,18 @@ function authenticate(req, res, next) {
 // Usage: router.get('/admin', authenticate, authorize(['admin']), handler)
 // Must run AFTER authenticate so req.user is already populated.
 const authorize = (roles) => {
+  // Fail loudly at setup time if caller passes a non-array (e.g. a bare string)
+  if (!Array.isArray(roles)) {
+    throw new Error('authorize() requires an array of roles')
+  }
+
   return (req, res, next) => {
+    // authorize() must run after authenticate(); if req.user is missing the
+    // route was wired without authenticate and we should reject immediately
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' })
+    }
+
     // roles.includes() checks whether the user's role is in the allowed list
     if (!roles.includes(req.user.role)) {
       // 403 Forbidden — authenticated but not permitted
