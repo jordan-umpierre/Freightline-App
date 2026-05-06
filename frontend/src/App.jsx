@@ -712,10 +712,12 @@ function App() {
     setBanner('')
 
     try {
+      const availableVehicle = vehicles.find((vehicle) => vehicle.status === 'available')
+
       await apiRequest(`/loads/${load.id}/assign`, {
         method: 'POST',
         token,
-        body: vehicles[0]?.id ? { vehicle_id: vehicles[0].id } : {},
+        body: availableVehicle?.id ? { vehicle_id: availableVehicle.id } : {},
       })
       setSelectedLoadId(load.id)
       await reloadAndEvents()
