@@ -1,6 +1,8 @@
 require('dotenv').config()
+const http = require('http')
 const pool = require('./db/pool')
 const app = require('./app')
+const { attachLiveServer } = require('./services/liveHub')
 
 pool.query('SELECT NOW()', (err, res) => {
   if (err) console.error('DB connection error', err)
@@ -8,7 +10,9 @@ pool.query('SELECT NOW()', (err, res) => {
 })
 
 const port = process.env.PORT || 3000
+const server = http.createServer(app)
+attachLiveServer(server, { app })
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Freightline API listening on port ${port}`)
 })

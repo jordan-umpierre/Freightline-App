@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node index.js",
     "test": "jest --runInBand",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "simulate:pings": "node scripts/simulate-pings.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -17,7 +18,9 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.20.0"
+    "mongodb": "^7.2.0",
+    "pg": "^8.20.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "jest": "^30.3.0",

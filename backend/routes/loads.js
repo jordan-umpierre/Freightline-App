@@ -1,6 +1,14 @@
 const express = require('express')
 const pool = require('../db/pool')
 const { authenticate, authorize } = require('../middleware/auth')
+const { buildExceptions } = require('../services/geo')
+const { getPingsForLoad, insertPing } = require('../services/pingStore')
+const {
+  buildLiveStatesForLoads,
+  getLiveLoadsForUser,
+  getPingTargetLoad,
+  getTrackingLoadForUser,
+} = require('../services/liveState')
 
 const router = express.Router()
 
@@ -25,6 +33,13 @@ function toPositiveInteger(value) {
 function toCoordinate(value, min, max) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null
+  return parsed
+}
+
+function toNonNegativeNumber(value, fallback = 0) {
+  if (value === undefined || value === null || value === '') return fallback
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
   return parsed
 }
 
@@ -117,6 +132,18 @@ router.get('/', async (req, res) => {
   }
 })
 
+router.get('/live-state', async (req, res) => {
+  try {
+    const loads = await getLiveLoadsForUser(req.user)
+    const liveStates = await buildLiveStatesForLoads(loads)
+
+    res.json({ live_states: liveStates })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Could not load live state' })
+  }
+})
+
 router.post('/', authorize(['shipper']), async (req, res) => {
   const inputError = requireLoadInput(req.body)
   if (inputError) return res.status(400).json({ error: inputError })
@@ -178,6 +205,71 @@ router.get('/:id', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Could not load load' })
+  }
+})
+
+router.post('/:id/pings', authorize(['driver']), async (req, res) => {
+  const latitude = toCoordinate(req.body.latitude, -90, 90)
+  const longitude = toCoordinate(req.body.longitude, -180, 180)
+  const speedMph = toNonNegativeNumber(req.body.speed_mph, 0)
+  const headingDegrees = toNonNegativeNumber(req.body.heading_degrees, 0)
+  const recordedAt = req.body.recorded_at ? new Date(req.body.recorded_at) : new Date()
+
+  if (latitude === null) return res.status(400).json({ error: 'latitude must be a valid latitude' })
+  if (longitude === null) return res.status(400).json({ error: 'longitude must be a valid longitude' })
+  if (speedMph === null) return res.status(400).json({ error: 'speed_mph must be a non-negative number' })
+  if (headingDegrees === null || headingDegrees > 360) {
+    return res.status(400).json({ error: 'heading_degrees must be between 0 and 360' })
+  }
+  if (Number.isNaN(recordedAt.getTime())) {
+    return res.status(400).json({ error: 'recorded_at must be a valid date' })
+  }
+
+  try {
+    const load = await getPingTargetLoad(req.params.id, req.user)
+
+    if (load === null) return res.status(404).json({ error: 'Load not found' })
+    if (load === false) return res.status(403).json({ error: 'Forbidden' })
+    if (load.not_trackable) {
+      return res.status(409).json({ error: 'Only assigned or in-transit loads can receive pings' })
+    }
+
+    const ping = await insertPing({
+      load_id: load.id,
+      vehicle_id: load.vehicle_id,
+      driver_id: req.user.user_id,
+      shipper_id: load.shipper_id,
+      latitude,
+      longitude,
+      speed_mph: speedMph,
+      heading_degrees: headingDegrees,
+      recorded_at: recordedAt,
+      source: req.body.source || 'driver_api',
+    })
+    const exceptions = buildExceptions(load, ping)
+    const liveHub = req.app.get('liveHub')
+
+    if (liveHub) liveHub.broadcastLoadPing(load, ping, exceptions)
+
+    res.status(201).json({ ping, exceptions })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Could not record ping' })
+  }
+})
+
+router.get('/:id/pings', async (req, res) => {
+  try {
+    const load = await getTrackingLoadForUser(req.params.id, req.user)
+
+    if (load === null) return res.status(404).json({ error: 'Load not found' })
+    if (load === false) return res.status(403).json({ error: 'Forbidden' })
+
+    const pings = await getPingsForLoad(req.params.id, req.query.limit)
+    res.json({ pings })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Could not load pings' })
   }
 })
 
