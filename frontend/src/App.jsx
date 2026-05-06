@@ -744,7 +744,12 @@ function App() {
       setVehicles([])
     }
 
-    await refreshLiveState(currentToken)
+    try {
+      await refreshLiveState(currentToken)
+    } catch (err) {
+      setLiveStatus('offline')
+      setBanner(err.message)
+    }
   }
 
   useEffect(() => {
@@ -780,8 +785,16 @@ function App() {
           if (!ignore) setVehicles(vehicleData.vehicles)
         }
 
-        const liveData = await apiRequest('/loads/live-state', { token })
-        if (!ignore) setLiveStates(liveData.live_states)
+        try {
+          const liveData = await apiRequest('/loads/live-state', { token })
+          if (!ignore) setLiveStates(liveData.live_states)
+        } catch (liveErr) {
+          if (!ignore) {
+            setLiveStatus('offline')
+            setLiveStates([])
+            setBanner(liveErr.message)
+          }
+        }
       } catch (err) {
         localStorage.removeItem(TOKEN_KEY)
         if (!ignore) {
@@ -937,8 +950,12 @@ function App() {
     if (selectedLoadId) {
       const data = await apiRequest(`/loads/${selectedLoadId}/events`, { token })
       setEvents(data.events)
-      const pingData = await apiRequest(`/loads/${selectedLoadId}/pings?limit=12`, { token })
-      setPings(pingData.pings)
+      try {
+        const pingData = await apiRequest(`/loads/${selectedLoadId}/pings?limit=12`, { token })
+        setPings(pingData.pings)
+      } catch {
+        setPings([])
+      }
     }
   }
 
