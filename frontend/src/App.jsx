@@ -82,6 +82,24 @@ function formatWeight(weight) {
   return `${Number(weight || 0).toLocaleString()} lb`
 }
 
+function formatTime(value) {
+  if (!value) return 'No ping yet'
+
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(value))
+}
+
+function buildLiveUrl(token) {
+  const url = new URL(API_BASE)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.pathname = '/live'
+  url.search = `?token=${encodeURIComponent(token)}`
+  return url.toString()
+}
+
 function midpoint(load) {
   const originLat = Number(load.origin_lat)
   const originLng = Number(load.origin_lng)
@@ -102,7 +120,22 @@ function hasCoordinates(load) {
   ].every((value) => Number.isFinite(Number(value)))
 }
 
-function MapBoard({ loads, selectedLoadId, onSelect }) {
+function livePointForLoad(load, liveState) {
+  const ping = liveState?.latest_ping
+  if (ping && Number.isFinite(Number(ping.latitude)) && Number.isFinite(Number(ping.longitude))) {
+    return [Number(ping.latitude), Number(ping.longitude)]
+  }
+
+  return midpoint(load)
+}
+
+function exceptionTone(exceptions = []) {
+  if (exceptions.some((exception) => exception.severity === 'critical')) return '#b4502a'
+  if (exceptions.length > 0) return '#d69a1c'
+  return '#2e8f6d'
+}
+
+function MapBoard({ loads, liveStatesByLoadId, selectedLoadId, onSelect }) {
   const mapEl = useRef(null)
   const map = useRef(null)
   const layer = useRef(null)
@@ -137,10 +170,11 @@ function MapBoard({ loads, selectedLoadId, onSelect }) {
     loads.filter(hasCoordinates).forEach((load) => {
       const origin = [Number(load.origin_lat), Number(load.origin_lng)]
       const destination = [Number(load.destination_lat), Number(load.destination_lng)]
-      const activePoint = midpoint(load)
+      const liveState = liveStatesByLoadId[load.id]
+      const activePoint = livePointForLoad(load, liveState)
       const isSelected = load.id === selectedLoadId
 
-      bounds.push(origin, destination)
+      bounds.push(origin, destination, activePoint)
 
       L.polyline([origin, destination], {
         color: isSelected ? '#1f7a5c' : '#586474',
@@ -168,10 +202,10 @@ function MapBoard({ loads, selectedLoadId, onSelect }) {
         radius: isSelected ? 10 : 8,
         color: '#10231e',
         weight: 2,
-        fillColor: load.status === 'delivered' ? '#2e8f6d' : '#f7c948',
+        fillColor: liveState?.latest_ping ? exceptionTone(liveState.exceptions) : '#f7c948',
         fillOpacity: 0.95,
       })
-        .bindTooltip(`${load.origin_address} -> ${load.destination_address}`)
+        .bindTooltip(`${load.origin_address} -> ${load.destination_address}<br />Last ping: ${formatTime(liveState?.latest_ping?.recorded_at)}`)
         .on('click', () => onSelect(load.id))
         .addTo(layer.current)
     })
@@ -179,7 +213,7 @@ function MapBoard({ loads, selectedLoadId, onSelect }) {
     if (bounds.length > 0) {
       map.current.fitBounds(bounds, { padding: [28, 28], maxZoom: 7 })
     }
-  }, [loads, selectedLoadId, onSelect])
+  }, [loads, liveStatesByLoadId, selectedLoadId, onSelect])
 
   return <div className="map-canvas" ref={mapEl} />
 }
@@ -495,7 +529,53 @@ function LoadList({ title, loads, selectedLoadId, onSelect, actions }) {
   )
 }
 
-function DetailPanel({ user, token, load, events, onChanged }) {
+function LiveBadge({ status }) {
+  return <span className={`live-badge ${status}`}>{status.replace('_', ' ')}</span>
+}
+
+function ExceptionRail({ exceptions }) {
+  return (
+    <section className="workspace-panel stack">
+      <div>
+        <p className="eyebrow">Exceptions</p>
+        <h2>Live alerts</h2>
+      </div>
+
+      {exceptions.length === 0 ? (
+        <p className="empty-state">No active tracking exceptions.</p>
+      ) : (
+        <div className="exception-list">
+          {exceptions.map((item) => (
+            <button
+              className={`exception-item ${item.exception.severity}`}
+              key={`${item.load.id}-${item.exception.type}`}
+              onClick={() => item.onSelect(item.load.id)}
+            >
+              <strong>{item.exception.type.replaceAll('_', ' ')}</strong>
+              <span>{item.load.origin_address} to {item.load.destination_address}</span>
+              <p>{item.exception.message}</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function SimulatorCard() {
+  return (
+    <section className="workspace-panel stack">
+      <div>
+        <p className="eyebrow">Demo driver</p>
+        <h2>Simulator command</h2>
+      </div>
+      <code className="command-block">cd backend && npm run simulate:pings</code>
+      <code className="command-block">cd backend && npm run simulate:pings -- --off-route</code>
+    </section>
+  )
+}
+
+function DetailPanel({ user, token, load, events, pings, onChanged }) {
   const [rate, setRate] = useState(load ? String(Number(load.rate_cents) / 100) : '')
   const [error, setError] = useState('')
   const canEdit = user?.role === 'shipper' && load?.status === 'posted'
@@ -589,6 +669,20 @@ function DetailPanel({ user, token, load, events, onChanged }) {
           </div>
         ))}
       </div>
+
+      <div>
+        <p className="eyebrow">GPS pings</p>
+        <div className="ping-list">
+          {pings.length === 0 ? (
+            <p className="empty-state">No GPS pings for this load yet.</p>
+          ) : pings.map((ping) => (
+            <div className="ping-row" key={ping.id || `${ping.latitude}-${ping.recorded_at}`}>
+              <strong>{Number(ping.latitude).toFixed(4)}, {Number(ping.longitude).toFixed(4)}</strong>
+              <span>{formatTime(ping.recorded_at)} · {Number(ping.speed_mph || 0).toFixed(0)} mph · {ping.source || 'driver'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   )
 }
@@ -599,14 +693,39 @@ function App() {
   const [loads, setLoads] = useState([])
   const [vehicles, setVehicles] = useState([])
   const [events, setEvents] = useState([])
+  const [pings, setPings] = useState([])
+  const [liveStates, setLiveStates] = useState([])
+  const [liveStatus, setLiveStatus] = useState('offline')
   const [selectedLoadId, setSelectedLoadId] = useState('')
   const [banner, setBanner] = useState('')
   const [loading, setLoading] = useState(Boolean(token))
+  const selectedLoadIdRef = useRef('')
+  const loadsRef = useRef([])
 
   const selectedLoad = useMemo(
     () => loads.find((load) => load.id === selectedLoadId),
     [loads, selectedLoadId]
   )
+  const liveStatesByLoadId = useMemo(
+    () => Object.fromEntries(liveStates.map((state) => [state.load_id, state])),
+    [liveStates]
+  )
+  const exceptionItems = useMemo(
+    () => liveStates.flatMap((state) => (
+      state.exceptions.map((exception) => ({
+        exception,
+        load: state.load,
+        onSelect: setSelectedLoadId,
+      }))
+    )),
+    [liveStates]
+  )
+
+  async function refreshLiveState(currentToken = token) {
+    if (!currentToken) return
+    const data = await apiRequest('/loads/live-state', { token: currentToken })
+    setLiveStates(data.live_states)
+  }
 
   async function refreshWorkspace(currentToken = token, currentUser = user) {
     if (!currentToken || !currentUser) return
@@ -624,7 +743,17 @@ function App() {
     } else {
       setVehicles([])
     }
+
+    await refreshLiveState(currentToken)
   }
+
+  useEffect(() => {
+    selectedLoadIdRef.current = selectedLoadId
+  }, [selectedLoadId])
+
+  useEffect(() => {
+    loadsRef.current = loads
+  }, [loads])
 
   useEffect(() => {
     if (!token) return
@@ -650,11 +779,15 @@ function App() {
           const vehicleData = await apiRequest('/vehicles/me', { token })
           if (!ignore) setVehicles(vehicleData.vehicles)
         }
+
+        const liveData = await apiRequest('/loads/live-state', { token })
+        if (!ignore) setLiveStates(liveData.live_states)
       } catch (err) {
         localStorage.removeItem(TOKEN_KEY)
         if (!ignore) {
           setToken(null)
           setBanner(err.message)
+          setLiveStatus('offline')
         }
       } finally {
         if (!ignore) setLoading(false)
@@ -689,6 +822,102 @@ function App() {
     }
   }, [token, selectedLoadId])
 
+  useEffect(() => {
+    if (!token || !selectedLoadId) return
+
+    let ignore = false
+
+    async function loadPings() {
+      try {
+        const data = await apiRequest(`/loads/${selectedLoadId}/pings?limit=12`, { token })
+        if (!ignore) setPings(data.pings)
+      } catch {
+        if (!ignore) setPings([])
+      }
+    }
+
+    loadPings()
+
+    return () => {
+      ignore = true
+    }
+  }, [token, selectedLoadId])
+
+  useEffect(() => {
+    if (!token) return
+
+    let stopped = false
+    let socket
+    let reconnectTimer
+
+    function connect() {
+      if (stopped) return
+
+      setLiveStatus('reconnecting')
+      socket = new WebSocket(buildLiveUrl(token))
+
+      socket.onopen = () => setLiveStatus('connected')
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data)
+
+        if (message.type === 'load_ping') {
+          setLiveStates((current) => {
+            const withoutLoad = current.filter((state) => state.load_id !== message.load_id)
+            const existing = current.find((state) => state.load_id === message.load_id)
+            const nextState = existing || {
+              load_id: message.load_id,
+              load: loadsRef.current.find((load) => load.id === message.load_id),
+              exceptions: [],
+            }
+
+            if (!nextState.load) return current
+
+            return [
+              ...withoutLoad,
+              {
+                ...nextState,
+                latest_ping: message.ping,
+                exceptions: message.exceptions || [],
+              },
+            ]
+          })
+
+          if (selectedLoadIdRef.current === message.load_id) {
+            setPings((current) => [
+              message.ping,
+              ...current.filter((ping) => ping.id !== message.ping.id),
+            ].slice(0, 12))
+          }
+        }
+
+        if (message.type === 'load_exception') {
+          setLiveStates((current) => current.map((state) => (
+            state.load_id === message.load_id
+              ? { ...state, exceptions: message.exceptions }
+              : state
+          )))
+        }
+      }
+      socket.onclose = () => {
+        if (stopped) return
+        setLiveStatus('reconnecting')
+        reconnectTimer = setTimeout(connect, 1500)
+      }
+      socket.onerror = () => {
+        setLiveStatus('offline')
+        socket.close()
+      }
+    }
+
+    reconnectTimer = setTimeout(connect, 0)
+
+    return () => {
+      stopped = true
+      clearTimeout(reconnectTimer)
+      if (socket) socket.close()
+    }
+  }, [token])
+
   function logout() {
     localStorage.removeItem(TOKEN_KEY)
     setToken(null)
@@ -696,7 +925,10 @@ function App() {
     setLoads([])
     setVehicles([])
     setEvents([])
+    setPings([])
+    setLiveStates([])
     setSelectedLoadId('')
+    setLiveStatus('offline')
     setLoading(false)
   }
 
@@ -705,6 +937,8 @@ function App() {
     if (selectedLoadId) {
       const data = await apiRequest(`/loads/${selectedLoadId}/events`, { token })
       setEvents(data.events)
+      const pingData = await apiRequest(`/loads/${selectedLoadId}/pings?limit=12`, { token })
+      setPings(pingData.pings)
     }
   }
 
@@ -767,6 +1001,7 @@ function App() {
           <h1>{user?.role === 'shipper' ? 'Shipper operations' : 'Driver operations'}</h1>
         </div>
         <div className="account-strip">
+          <LiveBadge status={liveStatus} />
           <span>{user?.first_name} {user?.last_name}</span>
           <span className="role-chip">{user?.role}</span>
           <button onClick={logout}>Logout</button>
@@ -779,16 +1014,29 @@ function App() {
         <div className="map-copy">
           <p className="eyebrow">Live board</p>
           <h2>{activeLoads.length} active loads</h2>
+          <span>{exceptionItems.length} exceptions</span>
         </div>
-        <MapBoard loads={loads} selectedLoadId={selectedLoadId} onSelect={setSelectedLoadId} />
+        <MapBoard
+          loads={loads}
+          liveStatesByLoadId={liveStatesByLoadId}
+          selectedLoadId={selectedLoadId}
+          onSelect={setSelectedLoadId}
+        />
       </section>
 
       <section className="workspace-grid">
         <div className="left-rail">
           {user?.role === 'shipper' ? (
-            <LoadForm token={token} onCreated={reloadAndEvents} />
+            <>
+              <LoadForm token={token} onCreated={reloadAndEvents} />
+              <ExceptionRail exceptions={exceptionItems} />
+            </>
           ) : (
-            <VehiclePanel token={token} vehicles={vehicles} onCreated={reloadAndEvents} />
+            <>
+              <VehiclePanel token={token} vehicles={vehicles} onCreated={reloadAndEvents} />
+              <SimulatorCard />
+              <ExceptionRail exceptions={exceptionItems} />
+            </>
           )}
         </div>
 
@@ -816,6 +1064,7 @@ function App() {
           token={token}
           load={selectedLoad}
           events={events}
+          pings={pings}
           onChanged={reloadAndEvents}
         />
       </section>

@@ -197,7 +197,8 @@ button:focus-visible {
 }
 
 .role-chip,
-.count {
+.count,
+.live-badge {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
@@ -208,6 +209,21 @@ button:focus-visible {
   font-size: 13px;
   font-weight: 800;
   text-transform: capitalize;
+}
+
+.live-badge {
+  color: #19543f;
+  background: rgba(46, 143, 109, 0.18);
+}
+
+.live-badge.reconnecting {
+  color: #6a4b00;
+  background: rgba(247, 201, 72, 0.22);
+}
+
+.live-badge.offline {
+  color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .banner {
@@ -234,6 +250,13 @@ button:focus-visible {
 .map-copy h2 {
   margin: 2px 0 0;
   color: var(--ink);
+}
+
+.map-copy span {
+  color: var(--muted);
+  display: block;
+  font-size: 13px;
+  margin-top: 3px;
 }
 
 .map-canvas {
@@ -369,6 +392,64 @@ tbody tr:hover,
   gap: 12px;
   border-top: 1px solid var(--border);
   padding-top: 10px;
+}
+
+.exception-list,
+.ping-list {
+  display: grid;
+  gap: 10px;
+}
+
+.exception-item,
+.ping-row {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field);
+  padding: 11px;
+}
+
+.exception-item {
+  color: inherit;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  width: 100%;
+}
+
+.exception-item.critical {
+  border-color: rgba(180, 80, 42, 0.35);
+  background: var(--danger-bg);
+}
+
+.exception-item.warning {
+  border-color: rgba(214, 154, 28, 0.35);
+  background: rgba(247, 201, 72, 0.14);
+}
+
+.exception-item strong,
+.ping-row strong {
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.exception-item span,
+.exception-item p,
+.ping-row span {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.command-block {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .metric-grid {
