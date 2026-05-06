@@ -1,18 +1,18 @@
 require('dotenv').config()
 const pool = require('./db/pool')
 const { authenticate } = require('./middleware/auth')
+const express = require('express')
+const authRouter = require('./routes/auth')
+
 pool.query('SELECT NOW()', (err, res) => {
   if (err) console.error('DB connection error', err)
   else console.log('DB connected:', res.rows[0])
 })
 
-const express = require('express')
 const app = express()
 const port = 3000
 
 app.use(express.json())
-
-const authRouter = require('./routes/auth')
 app.use('/auth', authRouter)
 
 // TEMP: remove after middleware verified
