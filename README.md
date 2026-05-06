@@ -12,6 +12,7 @@ The goal is to show end-to-end product judgment for transportation software:
 - Relational freight data with clear ownership rules
 - Guardrails around vehicle capacity, oversized freight, and load status transitions
 - A React operations dashboard with map visibility
+- Mongo-backed GPS pings with live WebSocket updates
 - Tests and CI that prove the main API behaviors
 
 ## Architecture
@@ -22,18 +23,23 @@ flowchart LR
   Web --> API[Express API]
   API --> Auth[JWT Auth Middleware]
   API --> PG[(Postgres)]
+  API --> Mongo[(MongoDB)]
+  API --> Live[WebSocket /live]
   PG --> Users[users]
   PG --> Vehicles[vehicles]
   PG --> Loads[loads]
   PG --> Events[load_events]
+  Mongo --> Pings[gps_pings]
+  Live --> Web
 ```
 
-MongoDB is intentionally out of the core v1. The Postgres `load_events` table handles the demo timeline, while a production-scale GPS ping stream would move to an append-heavy MongoDB or event pipeline.
+Postgres owns transactional freight records. MongoDB stores append-heavy GPS pings so live tracking can scale separately from relational load workflows.
 
 ## Current V1 Workflows
 
 - `shipper` users can register, login, post loads, edit posted-load rates, cancel posted loads, and view their load timelines.
 - `driver` users can register, login, register trucks, view posted freight, accept freight when their vehicle is eligible, and move assigned freight through `assigned -> in_transit -> delivered`.
+- Assigned drivers can submit GPS pings; shippers and assigned drivers see live map markers and tracking exceptions.
 - The frontend uses Leaflet and OpenStreetMap tiles with predefined demo lanes, so the app does not need a paid geocoding key.
 
 ## API Surface
@@ -50,6 +56,10 @@ MongoDB is intentionally out of the core v1. The Postgres `load_events` table ha
 - `POST /loads/:id/assign`
 - `PATCH /loads/:id/status`
 - `GET /loads/:id/events`
+- `POST /loads/:id/pings`
+- `GET /loads/:id/pings?limit=50`
+- `GET /loads/live-state`
+- `WS /live?token=<jwt>`
 
 ## Local Setup
 
@@ -79,6 +89,13 @@ psql -d freightline -f backend/db/migrations/003_create_loads.sql
 psql -d freightline -f backend/db/migrations/004_add_load_coordinates_and_events.sql
 ```
 
+MongoDB is required for live GPS pings. The backend defaults to:
+
+```bash
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB=freightline
+```
+
 Seed demo data:
 
 ```bash
@@ -90,6 +107,20 @@ Demo password for seeded users: `secret123`
 - `demo.shipper@freightline.local`
 - `demo.driver@freightline.local`
 
+Run the live GPS simulator in another terminal:
+
+```bash
+cd backend
+npm run simulate:pings
+```
+
+Trigger an off-route exception:
+
+```bash
+cd backend
+npm run simulate:pings -- --off-route
+```
+
 ## Quality Checks
 
 ```bash
@@ -100,8 +131,7 @@ cd frontend && npm run build
 
 ## What I Would Scale Next
 
-- Move high-volume GPS pings from Postgres demo events to MongoDB or a streaming ingestion path.
 - Add S3 presigned upload flows for proof-of-delivery documents.
-- Add WebSockets for live board updates instead of client refreshes.
 - Add real geocoding and route distance calculations behind a provider abstraction.
+- Move GPS ingestion behind a device-authenticated API key flow or event stream.
 - Add separate carrier/company entities once the v1 driver-as-carrier simplification is no longer enough.
