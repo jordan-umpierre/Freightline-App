@@ -1,6 +1,5 @@
 require('dotenv').config()
 const pool = require('./db/pool')
-const { authenticate, authorize } = require('./middleware/auth')
 const express = require('express')
 const authRouter = require('./routes/auth')
 
@@ -14,11 +13,6 @@ const port = 3000
 
 app.use(express.json())
 app.use('/auth', authRouter)
-
-// TEMP: remove after middleware verified
-app.get('/protected-test', authenticate, authorize(['driver']), (req, res) => {
-  res.json({ message: 'You are in', user: req.user })
-})
 
 app.get('/', (req, res) => {
     res.send('Hello World!')
