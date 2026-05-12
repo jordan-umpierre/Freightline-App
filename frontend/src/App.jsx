@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
+import { exceptionTone } from './lib/exceptionTone'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const TOKEN_KEY = 'freightline_token'
@@ -127,12 +128,6 @@ function livePointForLoad(load, liveState) {
   }
 
   return midpoint(load)
-}
-
-function exceptionTone(exceptions = []) {
-  if (exceptions.some((exception) => exception.severity === 'critical')) return '#b4502a'
-  if (exceptions.length > 0) return '#d69a1c'
-  return '#2e8f6d'
 }
 
 function MapBoard({ loads, liveStatesByLoadId, selectedLoadId, onSelect }) {
@@ -1090,3 +1085,4 @@ function App() {
 }
 
 export default App
+export { AuthScreen, LoadList }
