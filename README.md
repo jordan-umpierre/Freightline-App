@@ -1,19 +1,31 @@
 # Freightline
 
-Freightline is a freight operations portfolio project built with React, Node/Express, and Postgres. It models a Ryan/FLEX-style workflow: shippers post loads, drivers register trucks, drivers accept eligible freight, and both roles can inspect active work on a map/status board.
+A freight operations portfolio project that models a Ryan/ProTransport-style logistics workflow: shippers post loads, drivers register trucks, drivers accept eligible freight, and both roles inspect active work on a live map. Built with React, Node/Express, Postgres, MongoDB, and WebSockets.
 
-This project is inspired by public logistics workflows from Shamrock Trading Corporation brands such as [Ryan Transportation](https://www.ryantrans.com/) and [ProTransport](https://www.pro-transport.com/). It is not affiliated with, endorsed by, or branded as Shamrock Trading Corporation.
+> **Live demo:** https://freightline-app.vercel.app
+> **API:** https://freightline-app-production.up.railway.app
+>
+> Sign in as `demo.shipper@freightline.local` / `secret123` to post and cancel loads.
+> Sign in as `demo.driver@freightline.local` / `secret123` to register a truck, accept freight, and move loads through delivery.
+>
+> Note: Railway's free tier cold-starts; the first request can take about 10 seconds to warm up.
 
-## Why This Exists
+![Shipper dashboard](docs/screenshots/01-shipper-dashboard.png)
+*Shipper view: posted and active freight on the live ops board.*
 
-The goal is to show end-to-end product judgment for transportation software:
+![Driver accepting a load](docs/screenshots/02-driver-accept.png)
+*Driver view: eligible freight with one-click accept and status transitions.*
 
-- Role-based JWT auth for shippers and drivers
-- Relational freight data with clear ownership rules
-- Guardrails around vehicle capacity, oversized freight, and load status transitions
-- A React operations dashboard with map visibility
-- Mongo-backed GPS pings with live WebSocket updates
-- Tests and CI that prove the main API behaviors
+![Live tracking with off-route exception](docs/screenshots/03-live-tracking.png)
+*Live GPS tracking with an off-route exception flagged in real time.*
+
+## Try it in 90 seconds
+
+1. Open the live demo and sign in as the **shipper**.
+2. Click **Post load**, choose a demo lane, and submit it.
+3. Log out, sign in as the **driver**, and click **Register truck** with the default capacity.
+4. Click **Accept** on the new load, then **Start** to mark it in transit.
+5. Keep the driver dashboard open while the GPS simulator runs from a local terminal. Use the deployed API command in Local Setup if you want to drive the live demo.
 
 ## Architecture
 
@@ -33,37 +45,31 @@ flowchart LR
   Live --> Web
 ```
 
-Postgres owns transactional freight records. MongoDB stores append-heavy GPS pings so live tracking can scale separately from relational load workflows.
+Postgres owns transactional freight records: users, vehicles, loads, ownership rules, and ACID-guarded status transitions. MongoDB stores append-heavy GPS pings so live tracking can scale independently of the relational workflow.
+
+This project is inspired by public logistics workflows from Shamrock Trading Corporation brands such as [Ryan Transportation](https://www.ryantrans.com/) and [ProTransport](https://www.pro-transport.com/). It is not affiliated with, endorsed by, or branded as Shamrock Trading Corporation.
 
 ## Current V1 Workflows
 
-- `shipper` users can register, login, post loads, edit posted-load rates, cancel posted loads, and view their load timelines.
-- `driver` users can register, login, register trucks, view posted freight, accept freight when their vehicle is eligible, and move assigned freight through `assigned -> in_transit -> delivered`.
-- Assigned drivers can submit GPS pings; shippers and assigned drivers see live map markers and tracking exceptions.
+- **Shippers** can register, log in, post loads, edit posted-load rates, cancel posted loads, and view load timelines.
+- **Drivers** can register, log in, register trucks, view posted freight, accept freight when their vehicle is eligible, and move assigned freight through `assigned -> in_transit -> delivered`.
+- Assigned drivers submit GPS pings; shippers and assigned drivers see live map markers and tracking exceptions.
 - The frontend uses Leaflet and OpenStreetMap tiles with predefined demo lanes, so the app does not need a paid geocoding key.
 
 ## API Surface
 
-- `POST /auth/register`
-- `POST /auth/login`
-- `GET /auth/me`
-- `POST /vehicles`
-- `GET /vehicles/me`
-- `POST /loads`
-- `GET /loads`
-- `GET /loads/:id`
-- `PATCH /loads/:id`
-- `POST /loads/:id/assign`
-- `PATCH /loads/:id/status`
+- `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- `POST /vehicles`, `GET /vehicles/me`
+- `POST /loads`, `GET /loads`, `GET /loads/:id`, `PATCH /loads/:id`
+- `POST /loads/:id/assign`, `PATCH /loads/:id/status`
 - `GET /loads/:id/events`
-- `POST /loads/:id/pings`
-- `GET /loads/:id/pings?limit=50`
+- `POST /loads/:id/pings`, `GET /loads/:id/pings?limit=50`
 - `GET /loads/live-state`
 - `WS /live?token=<jwt>`
 
 ## Local Setup
 
-Backend:
+### Backend
 
 ```bash
 cd backend
@@ -72,7 +78,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Frontend:
+### Frontend
 
 ```bash
 cd frontend
@@ -80,7 +86,9 @@ npm install
 npm run dev
 ```
 
-Run database migrations manually against your local Postgres database:
+The frontend points at `http://localhost:3000` by default. Set `VITE_API_URL` when using a deployed backend.
+
+### Database migrations
 
 ```bash
 psql -d freightline -f backend/db/migrations/001_create_users.sql
@@ -89,14 +97,16 @@ psql -d freightline -f backend/db/migrations/003_create_loads.sql
 psql -d freightline -f backend/db/migrations/004_add_load_coordinates_and_events.sql
 ```
 
-MongoDB is required for live GPS pings. The backend defaults to:
+### MongoDB
+
+The backend defaults to:
 
 ```bash
 MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB=freightline
 ```
 
-Seed demo data:
+### Demo seed data
 
 ```bash
 psql -d freightline -f backend/db/seed_demo.sql
@@ -107,18 +117,19 @@ Demo password for seeded users: `secret123`
 - `demo.shipper@freightline.local`
 - `demo.driver@freightline.local`
 
-Run the live GPS simulator in another terminal:
+### Live GPS simulator
 
 ```bash
 cd backend
 npm run simulate:pings
+npm run simulate:pings -- --off-route
 ```
 
-Trigger an off-route exception:
+To point the simulator at the deployed Railway API:
 
 ```bash
 cd backend
-npm run simulate:pings -- --off-route
+API_URL=https://freightline-app-production.up.railway.app npm run simulate:pings -- --off-route
 ```
 
 ## Quality Checks
@@ -129,9 +140,15 @@ cd frontend && npm run lint
 cd frontend && npm run build
 ```
 
-## What I Would Scale Next
+Backend tests use Jest + Supertest with a global mock of `db/mongo`, so test runs do not open a real MongoDB connection. CI runs backend tests, frontend linting, and the frontend production build on every push via GitHub Actions.
 
-- Add S3 presigned upload flows for proof-of-delivery documents.
-- Add real geocoding and route distance calculations behind a provider abstraction.
-- Move GPS ingestion behind a device-authenticated API key flow or event stream.
-- Add separate carrier/company entities once the v1 driver-as-carrier simplification is no longer enough.
+## What I Would Build Next at Scale
+
+- **GPS pings hit the API directly today.** At more than 100 trucks, I would move ingestion to a device-authenticated MQTT or Kafka path with the API as a downstream consumer, because direct HTTP creates write amplification on the API event loop and has no good way to absorb a reconnect storm.
+- **Driver and carrier are the same entity in V1.** A real freight broker has carriers, each with multiple drivers and vehicles. Splitting them is a small schema change but a larger UX and permission-model change, so I kept V1 focused on the shipper-driver workflow.
+- **Proof-of-delivery uploads are not implemented yet.** The production version would use S3 presigned uploads, a `pending -> uploaded -> clean` document lifecycle, and a malware-scan step before exposing signed download URLs.
+- **Shipper UX assumes one shipper org per user.** Most freight brokers have a shipper company with multiple users. That would become a `companies` table, a `user_companies` join, and permission checks on top of the current role system.
+- **No real geocoding yet.** The demo lanes have hard-coded coordinates because geocoding APIs cost money. A provider interface would let me swap Mapbox, HERE, or OSRM behind a feature flag.
+- **Frontend behavior needs component-level regression coverage.** The next quality pass is Vitest + React Testing Library coverage for auth, load-list actions, and exception display states.
+
+Built by Jordan Umpierre as a portfolio project. License: MIT.
