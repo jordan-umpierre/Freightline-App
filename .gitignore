@@ -1,3 +1,12 @@
 node_modules/
 .env
 dist/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.local
+
+# Finder duplicates ("file 2.ext", "file 3.ext")
+* [0-9].*
