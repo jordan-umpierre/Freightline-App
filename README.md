@@ -54,6 +54,7 @@ This project is inspired by public logistics workflows from Shamrock Trading Cor
 - **Shippers** can register, log in, post loads, edit posted-load rates, cancel posted loads, and view load timelines.
 - **Drivers** can register, log in, register trucks, view posted freight, accept freight when their vehicle is eligible, and move assigned freight through `assigned -> in_transit -> delivered`.
 - Assigned drivers submit GPS pings; shippers and assigned drivers see live map markers and tracking exceptions.
+- Drivers can upload proof-of-delivery JPEG, PNG, or PDF documents through short-lived S3 presigned URLs; shippers can view uploaded documents through signed download links.
 - The frontend uses Leaflet and OpenStreetMap tiles with predefined demo lanes, so the app does not need a paid geocoding key.
 
 ## API Surface
@@ -64,6 +65,7 @@ This project is inspired by public logistics workflows from Shamrock Trading Cor
 - `POST /loads/:id/assign`, `PATCH /loads/:id/status`
 - `GET /loads/:id/events`
 - `POST /loads/:id/pings`, `GET /loads/:id/pings?limit=50`
+- `POST /loads/:id/documents/pod-upload-url`, `POST /loads/:id/documents/:doc_id/confirm`, `GET /loads/:id/documents`
 - `GET /loads/live-state`
 - `WS /live?token=<jwt>`
 
@@ -77,6 +79,8 @@ npm install
 cp .env.example .env
 npm run dev
 ```
+
+The backend reads AWS credentials and bucket name from `.env`. See `backend/.env.example` for the four `AWS_*` keys required for proof-of-delivery uploads.
 
 ### Frontend
 
@@ -95,6 +99,8 @@ psql -d freightline -f backend/db/migrations/001_create_users.sql
 psql -d freightline -f backend/db/migrations/002_create_vehicles.sql
 psql -d freightline -f backend/db/migrations/003_create_loads.sql
 psql -d freightline -f backend/db/migrations/004_add_load_coordinates_and_events.sql
+psql -d freightline -f backend/db/migrations/005_create_load_documents.sql
+psql -d freightline -f backend/db/migrations/006_extend_load_events_pod_uploaded.sql
 ```
 
 ### MongoDB
@@ -137,18 +143,18 @@ API_URL=https://freightline-app-production.up.railway.app npm run simulate:pings
 ```bash
 cd backend && npm test
 cd frontend && npm run lint
+cd frontend && npm test
 cd frontend && npm run build
 ```
 
-Backend tests use Jest + Supertest with a global mock of `db/mongo`, so test runs do not open a real MongoDB connection. CI runs backend tests, frontend linting, and the frontend production build on every push via GitHub Actions.
+Backend tests use Jest + Supertest with global mocks of MongoDB and S3 boundaries, so test runs do not open real external connections. Frontend tests use Vitest + React Testing Library for core UI contracts. CI runs backend tests, frontend linting, frontend tests, and the frontend production build on every push via GitHub Actions.
 
 ## What I Would Build Next at Scale
 
 - **GPS pings hit the API directly today.** At more than 100 trucks, I would move ingestion to a device-authenticated MQTT or Kafka path with the API as a downstream consumer, because direct HTTP creates write amplification on the API event loop and has no good way to absorb a reconnect storm.
 - **Driver and carrier are the same entity in V1.** A real freight broker has carriers, each with multiple drivers and vehicles. Splitting them is a small schema change but a larger UX and permission-model change, so I kept V1 focused on the shipper-driver workflow.
-- **Proof-of-delivery uploads are not implemented yet.** The production version would use S3 presigned uploads, a `pending -> uploaded -> clean` document lifecycle, and a malware-scan step before exposing signed download URLs.
+- **POD uploads are stored in S3 but not virus-scanned.** For production, I would run an `s3:ObjectCreated` Lambda that hands the object to ClamAV before flipping the document from `uploaded` to `clean`.
 - **Shipper UX assumes one shipper org per user.** Most freight brokers have a shipper company with multiple users. That would become a `companies` table, a `user_companies` join, and permission checks on top of the current role system.
 - **No real geocoding yet.** The demo lanes have hard-coded coordinates because geocoding APIs cost money. A provider interface would let me swap Mapbox, HERE, or OSRM behind a feature flag.
-- **Frontend behavior needs component-level regression coverage.** The next quality pass is Vitest + React Testing Library coverage for auth, load-list actions, and exception display states.
 
 Built by Jordan Umpierre as a portfolio project. License: MIT.

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
+import DocumentList from './components/DocumentList'
+import PodUpload from './components/PodUpload'
 import { exceptionTone } from './lib/exceptionTone'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
@@ -570,7 +572,7 @@ function SimulatorCard() {
   )
 }
 
-function DetailPanel({ user, token, load, events, pings, onChanged }) {
+function DetailPanel({ user, token, load, events, pings, documents, onChanged, onDocumentsChanged }) {
   const [rate, setRate] = useState(load ? String(Number(load.rate_cents) / 100) : '')
   const [error, setError] = useState('')
   const canEdit = user?.role === 'shipper' && load?.status === 'posted'
@@ -678,6 +680,14 @@ function DetailPanel({ user, token, load, events, pings, onChanged }) {
           ))}
         </div>
       </div>
+
+      <div className="documents-section">
+        <p className="eyebrow">Documents</p>
+        {user?.role === 'driver' && (
+          <PodUpload load={load} token={token} onUploaded={onDocumentsChanged} />
+        )}
+        <DocumentList documents={documents} />
+      </div>
     </section>
   )
 }
@@ -689,6 +699,8 @@ function App() {
   const [vehicles, setVehicles] = useState([])
   const [events, setEvents] = useState([])
   const [pings, setPings] = useState([])
+  const [documents, setDocuments] = useState([])
+  const [documentsLoadId, setDocumentsLoadId] = useState('')
   const [liveStates, setLiveStates] = useState([])
   const [liveStatus, setLiveStatus] = useState('offline')
   const [selectedLoadId, setSelectedLoadId] = useState('')
@@ -720,6 +732,23 @@ function App() {
     if (!currentToken) return
     const data = await apiRequest('/loads/live-state', { token: currentToken })
     setLiveStates(data.live_states)
+  }
+
+  async function refreshDocuments(loadId = selectedLoadId, currentToken = token) {
+    if (!currentToken || !loadId) {
+      setDocuments([])
+      setDocumentsLoadId('')
+      return
+    }
+
+    try {
+      const data = await apiRequest(`/loads/${loadId}/documents`, { token: currentToken })
+      setDocuments(data.documents)
+      setDocumentsLoadId(loadId)
+    } catch {
+      setDocuments([])
+      setDocumentsLoadId(loadId)
+    }
   }
 
   async function refreshWorkspace(currentToken = token, currentUser = user) {
@@ -835,6 +864,33 @@ function App() {
 
     let ignore = false
 
+    async function loadDocuments() {
+      try {
+        const data = await apiRequest(`/loads/${selectedLoadId}/documents`, { token })
+        if (!ignore) {
+          setDocuments(data.documents)
+          setDocumentsLoadId(selectedLoadId)
+        }
+      } catch {
+        if (!ignore) {
+          setDocuments([])
+          setDocumentsLoadId(selectedLoadId)
+        }
+      }
+    }
+
+    loadDocuments()
+
+    return () => {
+      ignore = true
+    }
+  }, [token, selectedLoadId])
+
+  useEffect(() => {
+    if (!token || !selectedLoadId) return
+
+    let ignore = false
+
     async function loadPings() {
       try {
         const data = await apiRequest(`/loads/${selectedLoadId}/pings?limit=12`, { token })
@@ -934,6 +990,8 @@ function App() {
     setVehicles([])
     setEvents([])
     setPings([])
+    setDocuments([])
+    setDocumentsLoadId('')
     setLiveStates([])
     setSelectedLoadId('')
     setLiveStatus('offline')
@@ -951,6 +1009,7 @@ function App() {
       } catch {
         setPings([])
       }
+      await refreshDocuments(selectedLoadId, token)
     }
   }
 
@@ -1004,6 +1063,7 @@ function App() {
     ? loads.filter((load) => load.status === 'posted')
     : loads
   const activeLoads = loads.filter((load) => !['delivered', 'cancelled'].includes(load.status))
+  const selectedDocuments = documentsLoadId === selectedLoadId ? documents : []
 
   return (
     <main className="app-shell">
@@ -1077,7 +1137,9 @@ function App() {
           load={selectedLoad}
           events={events}
           pings={pings}
+          documents={selectedDocuments}
           onChanged={reloadAndEvents}
+          onDocumentsChanged={reloadAndEvents}
         />
       </section>
     </main>
