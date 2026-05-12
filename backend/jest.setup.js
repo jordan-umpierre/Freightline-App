@@ -6,3 +6,11 @@ jest.mock('./db/mongo', () => ({
   getPingCollection: jest.fn(),
   closeMongo: jest.fn(),
 }))
+
+jest.mock('./services/s3', () => ({
+  ALLOWED_CONTENT_TYPES: new Set(['image/jpeg', 'image/png', 'application/pdf']),
+  MAX_POD_BYTES: 10 * 1024 * 1024,
+  isAllowedContentType: jest.requireActual('./services/s3').isAllowedContentType,
+  presignPodUpload: jest.fn(),
+  presignDocumentDownload: jest.fn(),
+}))
