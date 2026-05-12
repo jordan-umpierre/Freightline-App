@@ -12,6 +12,9 @@
     "dev": "nodemon index.js",
     "simulate:pings": "node scripts/simulate-pings.js"
   },
+  "jest": {
+    "setupFiles": ["<rootDir>/jest.setup.js"]
+  },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
