@@ -2,7 +2,7 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "Freightline backend API",
-  "license": "ISC",
+  "license": "MIT",
   "author": "Jordan Umpierre",
   "type": "commonjs",
   "main": "index.js",
