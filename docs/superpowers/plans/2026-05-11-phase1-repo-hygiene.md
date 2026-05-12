@@ -17,7 +17,7 @@
 | File | Action | Responsibility |
 |------|--------|----------------|
 | `backend/jest.setup.js` | Create | Global test setup that auto-mocks `db/mongo` so no test connects to a real Mongo. |
-| `backend/package.json` | Modify | Add `jest.setupFilesAfterEach` config; change `license` from `ISC` to `MIT`. |
+| `backend/package.json` | Modify | Add `jest.setupFiles` config; change `license` from `ISC` to `MIT`. |
 | `.gitignore` | Modify | Add `.DS_Store`, `*.local`, and Finder-dupe pattern. |
 | `frontend/src/index 2.css` | Delete | Finder dupe of `index.css` — should not exist. |
 | `CLAUDE.md` | Restore | Discard stale uncommitted edit (already obsolete). |
