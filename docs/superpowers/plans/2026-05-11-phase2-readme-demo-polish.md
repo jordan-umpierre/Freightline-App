@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the first 30 seconds of a recruiter's GitHub visit unambiguously good — visible demo links, screenshots, a 90-second try-it walkthrough, defensible "scale next" section, and no Vite-boilerplate README.
+**Goal:** Make the first 30 seconds of a GitHub visitor's GitHub visit unambiguously good — visible demo links, screenshots, a 90-second try-it walkthrough, defensible "scale next" section, and no Vite-boilerplate README.
 
 **Architecture:** Pure documentation. No application code changes. Three deliverables: top-level `README.md` rewrite, three screenshots in `docs/screenshots/`, and replacement of `frontend/README.md`.
 
 **Tech Stack:** Markdown, the deployed live demo (for capturing screenshots), Preview.app (or any image tool) for cropping.
 
-**Spec reference:** `docs/superpowers/specs/2026-05-11-freightline-resume-polish-design.md` Phase 2.
+**Spec reference:** `docs/superpowers/specs/2026-05-11-freightline-documentation-polish-design.md` Phase 2.
 
 **Prerequisite:** Phase 1 plan complete and CI green.
 
@@ -33,7 +33,7 @@
 - Create: `docs/screenshots/02-driver-accept.png`
 - Create: `docs/screenshots/03-live-tracking.png`
 
-These need a **live, populated app**. Use the deployed demo, not localhost — that way the screenshots match what a recruiter actually sees when they click the link.
+These need a **live, populated app**. Use the deployed demo, not localhost — that way the screenshots match what a GitHub visitor actually sees when they click the link.
 
 - [ ] **Step 1: Make sure the screenshots directory exists**
 
@@ -88,7 +88,7 @@ Expected: three files, each under 500 KB. If any are larger, run them through an
 **Files:**
 - Modify: `README.md`
 
-The new README leads with the demo, then shows what it looks like, then explains the architecture. Engineers and recruiters scan top-down — the first screenful must do the heavy lifting.
+The new README leads with the demo, then shows what it looks like, then explains the architecture. Engineers and GitHub visitors scan top-down — the first screenful must do the heavy lifting.
 
 - [ ] **Step 1: Replace `README.md` with the new structure**
 
@@ -97,7 +97,7 @@ Open `README.md` and replace its entire contents with:
 ````markdown
 # Freightline
 
-A freight operations portfolio project that models a Ryan/ProTransport-style logistics workflow: shippers post loads, drivers register trucks, drivers accept eligible freight, and both roles inspect active work on a live map. Built with React, Node/Express, Postgres, MongoDB, and WebSockets.
+A freight operations portfolio project that models a freight operations logistics workflow: shippers post loads, drivers register trucks, drivers accept eligible freight, and both roles inspect active work on a live map. Built with React, Node/Express, Postgres, MongoDB, and WebSockets.
 
 > 🚛 **Live demo:** https://freightline-app.vercel.app
 > **API:** https://freightline-app-production.up.railway.app
@@ -143,7 +143,7 @@ flowchart LR
 
 Postgres owns transactional freight records (foreign keys, ACID-guarded state transitions). MongoDB stores append-heavy GPS pings so live tracking scales independently of the relational workflow.
 
-This project is inspired by public logistics workflows from Shamrock Trading Corporation brands such as [Ryan Transportation](https://www.ryantrans.com/) and [ProTransport](https://www.pro-transport.com/). It is not affiliated with, endorsed by, or branded as Shamrock Trading Corporation.
+This project is inspired by public logistics workflows from . It is not affiliated with, endorsed by, or branded as freight operations domainoration.
 
 ## Current V1 Workflows
 
@@ -318,18 +318,18 @@ Check:
 - Demo block is at the top of the README, above the architecture diagram
 - All three screenshot images load (no broken-image icons)
 - Mermaid diagram renders (GitHub renders mermaid natively)
-- "What I Would Build Next at Scale" section reads as engineering judgement, not a TODO list
+- Scaling notes section reads as engineering judgment, not an open task list
 
 - [ ] **Step 3: Send the GitHub URL to a friend / yourself for a fresh-eyes scan**
 
-Optional but recommended. Ask: "If you saw this on a junior dev's resume, would you click into it?" If the answer is "I'd skim and move on," the demo block isn't doing enough work — iterate.
+Optional but recommended. Ask whether the demo block clearly shows what the app does and why it is worth exploring. If the answer is "I'd skim and move on," the demo block is not doing enough work yet.
 
 ---
 
 ## Acceptance criteria (from spec)
 
-- [x] Recruiter landing on the repo can click a working demo link without scrolling — verified by Step 2 above
-- [x] Three screenshots show the product without the recruiter logging in — Task 1
+- [x] GitHub visitor landing on the repo can click a working demo link without scrolling — verified by Step 2 above
+- [x] Three screenshots show the product without the GitHub visitor logging in — Task 1
 - [x] "What I'd scale next" reads as engineering judgement — Task 2 Step 1
 - [x] `frontend/README.md` is no longer Vite boilerplate — Task 3
 
@@ -337,6 +337,6 @@ Optional but recommended. Ask: "If you saw this on a junior dev's resume, would 
 
 ## Notes for the executor
 
-- This phase is heavy on judgment. The exact wording in the README matters more than checking off tasks. If a section feels weak, rewrite it — the goal is "a recruiter wants to keep reading."
-- The README references Phase 3 (frontend tests) and Phase 4 (POD uploads) features. If you're executing Phase 2 *before* those phases, replace those references with present-tense placeholders or wait until Phase 4 ships and revisit. Don't claim things that don't exist yet — the resume bullet phase will catch this anyway.
+- This phase is heavy on judgment. The exact wording in the README matters more than checking off tasks. If a section feels weak, rewrite it — the goal is "a GitHub visitor wants to keep reading."
+- The README references Phase 3 (frontend tests) and Phase 4 (POD uploads) features. If executing Phase 2 before those phases, keep those references out until the features ship. Do not claim things that do not exist yet.
 - Screenshots will go stale as the UI evolves. Re-take them anytime you ship a visible change.
