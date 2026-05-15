@@ -1,6 +1,6 @@
 # Freightline
 
-A freight operations portfolio project that models a Ryan/ProTransport-style logistics workflow: shippers post loads, drivers register trucks, drivers accept eligible freight, and both roles inspect active work on a live map. Built with React, Node/Express, Postgres, MongoDB, and WebSockets.
+A full-stack freight operations platform where shippers post loads, drivers register trucks, drivers accept eligible freight, and both roles monitor active work on a live map. Built with React, Node/Express, PostgreSQL, MongoDB, AWS S3, and WebSockets.
 
 > **Live demo:** https://freightline-app.vercel.app
 > **API:** https://freightline-app-production.up.railway.app
@@ -46,8 +46,6 @@ flowchart LR
 ```
 
 Postgres owns transactional freight records: users, vehicles, loads, ownership rules, and ACID-guarded status transitions. MongoDB stores append-heavy GPS pings so live tracking can scale independently of the relational workflow.
-
-This project is inspired by public logistics workflows from Shamrock Trading Corporation brands such as [Ryan Transportation](https://www.ryantrans.com/) and [ProTransport](https://www.pro-transport.com/). It is not affiliated with, endorsed by, or branded as Shamrock Trading Corporation.
 
 ## Current V1 Workflows
 
@@ -149,12 +147,12 @@ cd frontend && npm run build
 
 Backend tests use Jest + Supertest with global mocks of MongoDB and S3 boundaries, so test runs do not open real external connections. Frontend tests use Vitest + React Testing Library for core UI contracts. CI runs backend tests, frontend linting, frontend tests, and the frontend production build on every push via GitHub Actions.
 
-## What I Would Build Next at Scale
+## Scaling Notes
 
-- **GPS pings hit the API directly today.** At more than 100 trucks, I would move ingestion to a device-authenticated MQTT or Kafka path with the API as a downstream consumer, because direct HTTP creates write amplification on the API event loop and has no good way to absorb a reconnect storm.
-- **Driver and carrier are the same entity in V1.** A real freight broker has carriers, each with multiple drivers and vehicles. Splitting them is a small schema change but a larger UX and permission-model change, so I kept V1 focused on the shipper-driver workflow.
-- **POD uploads are stored in S3 but not virus-scanned.** For production, I would run an `s3:ObjectCreated` Lambda that hands the object to ClamAV before flipping the document from `uploaded` to `clean`.
-- **Shipper UX assumes one shipper org per user.** Most freight brokers have a shipper company with multiple users. That would become a `companies` table, a `user_companies` join, and permission checks on top of the current role system.
-- **No real geocoding yet.** The demo lanes have hard-coded coordinates because geocoding APIs cost money. A provider interface would let me swap Mapbox, HERE, or OSRM behind a feature flag.
+- **GPS ingestion:** Direct API writes work for the demo, but a larger fleet would benefit from device-authenticated MQTT or Kafka ingestion so reconnect storms do not overload the API event loop.
+- **Carrier modeling:** V1 treats driver and carrier as one entity. A production brokerage workflow would separate carriers, drivers, vehicles, and organization-level permissions.
+- **Proof-of-delivery scanning:** POD files are stored in S3 through presigned uploads. A production path would scan new objects before making them available for download.
+- **Shipper organizations:** V1 assumes one shipper account per user. Multi-user shipper companies would add company tables, membership records, and organization-scoped authorization.
+- **Geocoding:** Demo lanes use fixed coordinates to avoid paid geocoding. A provider interface would allow Mapbox, HERE, OSRM, or another routing provider behind a feature flag.
 
-Built by Jordan Umpierre as a portfolio project. License: MIT.
+License: MIT.
