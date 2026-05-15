@@ -8,7 +8,7 @@
 
 **Tech Stack:** Express, Postgres (new table + new event type), AWS S3, AWS SDK v3.
 
-**Spec reference:** `docs/superpowers/specs/2026-05-11-freightline-resume-polish-design.md` Phase 4.
+**Spec reference:** `docs/superpowers/specs/2026-05-11-freightline-documentation-polish-design.md` Phase 4.
 
 **Prerequisite:** Phases 1, 2, 3 plans complete and CI green. AWS account access required.
 
@@ -91,7 +91,7 @@ Attach an **inline policy** (not an AWS-managed one — too broad):
 }
 ```
 
-The `/pod/*` prefix means even if a key is malformed, the IAM user can't read or write outside that prefix. **This is the kind of detail that reads as senior in interview.**
+The `/pod/*` prefix means even if a key is malformed, the IAM user can't read or write outside that prefix. **This is the kind of detail that reads as senior in technical review.**
 
 - [ ] **Step 4: Create access keys for the IAM user**
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Vitest, React Testing Library, `@testing-library/user-event`, `@testing-library/jest-dom`, jsdom.
 
-**Spec reference:** `docs/superpowers/specs/2026-05-11-freightline-resume-polish-design.md` Phase 3.
+**Spec reference:** `docs/superpowers/specs/2026-05-11-freightline-documentation-polish-design.md` Phase 3.
 
 **Prerequisite:** Phase 1 plan complete and CI green.
 
