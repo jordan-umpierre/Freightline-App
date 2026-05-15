@@ -313,7 +313,8 @@ router.patch('/:id', authorize(['shipper']), async (req, res) => {
         }
 
         if (typeof value === 'string') value = value.trim()
-        if (field === 'oversized') value = Boolean(value)
+        // Boolean(value) would coerce the string "false" to true, so compare explicitly
+        if (field === 'oversized') value = value === true || value === 'true'
 
         values.push(value)
         updates.push(`${field} = $${values.length}`)

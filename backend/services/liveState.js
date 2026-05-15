@@ -4,19 +4,15 @@ const { getLatestPingsByLoadIds } = require('./pingStore')
 
 const ACTIVE_LOAD_STATUSES = ['assigned', 'in_transit']
 
-function activeStatusSql() {
-  return `('${ACTIVE_LOAD_STATUSES.join("','")}')`
-}
-
 async function getLiveLoadsForUser(user) {
   if (user.role === 'shipper') {
     const result = await pool.query(
       `SELECT l.*, v.driver_id
        FROM loads l
        LEFT JOIN vehicles v ON v.id = l.vehicle_id
-       WHERE l.shipper_id = $1 AND l.status IN ${activeStatusSql()}
+       WHERE l.shipper_id = $1 AND l.status = ANY($2)
        ORDER BY l.updated_at DESC`,
-      [user.user_id]
+      [user.user_id, ACTIVE_LOAD_STATUSES]
     )
 
     return result.rows
@@ -27,9 +23,9 @@ async function getLiveLoadsForUser(user) {
       `SELECT l.*, v.driver_id
        FROM loads l
        JOIN vehicles v ON v.id = l.vehicle_id
-       WHERE v.driver_id = $1 AND l.status IN ${activeStatusSql()}
+       WHERE v.driver_id = $1 AND l.status = ANY($2)
        ORDER BY l.updated_at DESC`,
-      [user.user_id]
+      [user.user_id, ACTIVE_LOAD_STATUSES]
     )
 
     return result.rows
