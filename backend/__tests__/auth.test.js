@@ -80,6 +80,21 @@ test('/auth/me requires a token', async () => {
   expect(response.body.error).toBe('No token provided')
 })
 
+test('register rejects passwords shorter than 8 characters', async () => {
+  const response = await request(app)
+    .post('/auth/register')
+    .send({
+      first_name: 'Alice',
+      last_name: 'Smith',
+      email: 'alice@test.com',
+      password: 'short',
+      role: 'shipper',
+    })
+
+  expect(response.status).toBe(400)
+  expect(response.body.error).toMatch(/password must be at least 8/i)
+})
+
 test('/auth/me returns the authenticated user profile', async () => {
   const user = {
     id: 'driver-1',

@@ -1,4 +1,17 @@
 const request = require('supertest')
+const app = require('../app')
+
+describe('security headers', () => {
+  test('sets X-Content-Type-Options to nosniff', async () => {
+    const response = await request(app).get('/')
+    expect(response.headers['x-content-type-options']).toBe('nosniff')
+  })
+
+  test('sets X-Frame-Options to deny cross-origin framing', async () => {
+    const response = await request(app).get('/')
+    expect(response.headers['x-frame-options']).toBeDefined()
+  })
+})
 
 describe('CORS policy', () => {
   const originalCorsOrigins = process.env.CORS_ORIGINS

@@ -1,5 +1,6 @@
 const cors = require('cors')
 const express = require('express')
+const helmet = require('helmet')
 const authRouter = require('./routes/auth')
 const documentsRouter = require('./routes/documents')
 const loadsRouter = require('./routes/loads')
@@ -24,6 +25,7 @@ function parseCorsOrigins(value) {
 
 const allowedCorsOrigins = new Set(parseCorsOrigins(process.env.CORS_ORIGINS))
 
+app.use(helmet())
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true)

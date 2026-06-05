@@ -10,11 +10,11 @@ A freight operations portfolio project that models a Ryan/ProTransport-style log
 >
 > Note: Railway's free tier cold-starts; the first request can take about 10 seconds to warm up.
 
+![Live tracking with off-route exception](docs/screenshots/03-live-tracking.png)
+*Live GPS tracking: the truck marker turns red and the exception rail fires when a driver deviates more than 75 miles from the expected corridor.*
+
 ![Driver accepting a load](docs/screenshots/02-driver-accept.png)
 *Driver view: eligible freight with one-click accept and status transitions.*
-
-![Live tracking with off-route exception](docs/screenshots/03-live-tracking.png)
-*Live GPS tracking with an off-route exception flagged in real time.*
 
 ## Try it in 90 seconds
 
@@ -148,6 +148,20 @@ cd frontend && npm run build
 ```
 
 Backend tests use Jest + Supertest with global mocks of MongoDB and S3 boundaries, so test runs do not open real external connections. Frontend tests use Vitest + React Testing Library for core UI contracts. CI runs backend tests, frontend linting, frontend tests, and the frontend production build on every push via GitHub Actions.
+
+## Architecture Decisions
+
+**Why Postgres for loads and MongoDB for GPS pings — not one database?**
+Load records are relational: a load belongs to a shipper, a vehicle belongs to a driver, an assignment ties them together with foreign-key constraints and ACID-safe status transitions. GPS pings are append-only, schema-flexible, and write-heavy — one ping every few seconds per active truck. Splitting the two databases means the relational workflow (assign, cancel, deliver) is never blocked by ping write throughput, and the ping store can be scaled or replaced independently. The `FOR UPDATE` row lock on the assignment transaction enforces correctness at the Postgres layer; MongoDB never needs to care about it.
+
+**Why presigned S3 URLs instead of uploading through the API server?**
+The API is a small Node process on Railway's free tier. If drivers uploaded proof-of-delivery files through it, every upload would sit on the event loop, blocking other requests for the duration of the transfer. Presigned URLs let the driver's browser upload directly to S3 in parallel with normal API traffic. The server only handles the lightweight steps: issuing the URL (one S3 API call) and confirming the upload via `HeadObject`. Binary data never touches Node.
+
+**Why `SELECT ... FOR UPDATE` on the load assignment?**
+Without a row lock, two drivers could both read a load as `posted` and both attempt to assign it at the same moment. Both reads would succeed, both updates would run, and the load would end up assigned to whichever driver's `UPDATE` committed last — with no error surfaced to the other driver. The `FOR UPDATE` lock ensures only one transaction can read-then-write the load row at a time. A second driver's transaction blocks until the first commits, then reads the now-`assigned` status and returns a 409.
+
+**Why WebSockets for live tracking instead of polling?**
+HTTP polling at one request per second per connected user is 60 requests per minute per user. With 10 shippers watching 5 loads each, that's 600 requests per minute of mostly-empty responses. The WebSocket connection is persistent: the server pushes a message only when a ping arrives, and only to the shipper and assigned driver for that specific load. Connection cost is one handshake; ongoing cost is proportional to actual ping volume, not viewer count.
 
 ## What I Would Build Next at Scale
 

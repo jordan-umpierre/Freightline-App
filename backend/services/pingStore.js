@@ -90,12 +90,17 @@ async function getLatestPingsByLoadIds(loadIds) {
 
   await ensurePingIndexes()
   const collection = await getPingCollection()
-  const pings = await collection
-    .find({ load_id: { $in: loadIds } })
-    .sort({ recorded_at: -1 })
-    .toArray()
+  const results = await collection.aggregate([
+    { $match: { load_id: { $in: loadIds } } },
+    { $sort: { load_id: 1, recorded_at: -1 } },
+    { $group: { _id: '$load_id', ping: { $first: '$$ROOT' } } },
+  ]).toArray()
 
-  return selectLatestPingByLoadId(pings.map(serializePing))
+  const latest = new Map()
+  for (const result of results) {
+    latest.set(result._id, serializePing(result.ping))
+  }
+  return latest
 }
 
 module.exports = {

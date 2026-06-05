@@ -182,6 +182,18 @@ test('assignment locks load and vehicle rows before assigning', async () => {
   expect(client.query.mock.calls[2][0]).toMatch(/FOR UPDATE/i)
 })
 
+test('GET /loads applies LIMIT and OFFSET when page and limit params are provided', async () => {
+  pool.query.mockResolvedValueOnce({ rows: [] })
+
+  await request(app)
+    .get('/loads?limit=10&page=2')
+    .set('Authorization', auth('shipper'))
+
+  const sql = pool.query.mock.calls[0][0]
+  expect(sql).toMatch(/LIMIT/i)
+  expect(sql).toMatch(/OFFSET/i)
+})
+
 test('drivers cannot skip status transitions', async () => {
   mockTransaction([
     {

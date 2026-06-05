@@ -1,4 +1,5 @@
 const express = require('express')
+const rateLimit = require('express-rate-limit')
 const pool = require('../db/pool')
 const { authenticate, authorize } = require('../middleware/auth')
 const { buildExceptions } = require('../services/geo')
@@ -12,6 +13,15 @@ const {
 } = require('../services/liveState')
 
 const router = express.Router()
+
+// Prevents a misbehaving or reconnecting device from flooding MongoDB on the ping endpoint.
+const pingRateLimiter = rateLimit({
+  windowMs: Number(process.env.PING_RATE_LIMIT_WINDOW_MS) || 60 * 1000,
+  max: Number(process.env.PING_RATE_LIMIT_MAX) || 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many pings, please slow down' },
+})
 
 const EDITABLE_FIELDS = [
   'origin_address',
@@ -176,17 +186,22 @@ function buildLoadUpdates(body) {
 router.use(authenticate)
 
 router.get('/', async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200)
+  const page = Math.max(Number(req.query.page) || 1, 1)
+  const offset = (page - 1) * limit
+
   try {
     if (req.user.role === 'shipper') {
       const result = await pool.query(
         `SELECT l.*
          FROM loads l
          WHERE l.shipper_id = $1
-         ORDER BY l.created_at DESC`,
-        [req.user.user_id]
+         ORDER BY l.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [req.user.user_id, limit, offset]
       )
 
-      return res.json({ loads: result.rows })
+      return res.json({ loads: result.rows, page, limit })
     }
 
     if (req.user.role === 'driver') {
@@ -195,11 +210,12 @@ router.get('/', async (req, res) => {
          FROM loads l
          LEFT JOIN vehicles v ON v.id = l.vehicle_id
          WHERE l.status = 'posted' OR v.driver_id = $1
-         ORDER BY l.created_at DESC`,
-        [req.user.user_id]
+         ORDER BY l.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [req.user.user_id, limit, offset]
       )
 
-      return res.json({ loads: result.rows })
+      return res.json({ loads: result.rows, page, limit })
     }
 
     res.status(403).json({ error: 'Forbidden' })
@@ -284,7 +300,7 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-router.post('/:id/pings', authorize(['driver']), async (req, res) => {
+router.post('/:id/pings', pingRateLimiter, authorize(['driver']), async (req, res) => {
   const latitude = toCoordinate(req.body.latitude, -90, 90)
   const longitude = toCoordinate(req.body.longitude, -180, 180)
   const speedMph = toNonNegativeNumber(req.body.speed_mph, 0)

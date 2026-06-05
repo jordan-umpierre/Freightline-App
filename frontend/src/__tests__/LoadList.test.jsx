@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
-import { LoadList } from '../App'
+import LoadList from '../components/LoadList'
 import {
   canFetchSelectedLoadData,
   createLoadTooltipContent,
