@@ -6,6 +6,7 @@ const {
   isAllowedContentType,
   presignDocumentDownload,
   presignPodUpload,
+  verifyUploadedDocument,
 } = require('../services/s3')
 
 const router = express.Router({ mergeParams: true })
@@ -125,6 +126,19 @@ router.post('/:doc_id/confirm', authorize(['driver']), async (req, res) => {
     if (doc.uploaded_by !== req.user.user_id) return res.status(403).json({ error: 'Forbidden' })
 
     if (doc.status === 'uploaded') return res.json({ document: doc })
+
+    const uploadMatchesRequest = await verifyUploadedDocument({
+      s3_bucket: doc.s3_bucket,
+      s3_key: doc.s3_key,
+      content_type: doc.content_type,
+      size_bytes: doc.size_bytes,
+    })
+
+    if (!uploadMatchesRequest) {
+      return res.status(409).json({
+        error: 'Uploaded document metadata does not match the requested upload',
+      })
+    }
 
     const updateResult = await pool.query(
       `UPDATE load_documents

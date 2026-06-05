@@ -10,9 +10,6 @@ A freight operations portfolio project that models a Ryan/ProTransport-style log
 >
 > Note: Railway's free tier cold-starts; the first request can take about 10 seconds to warm up.
 
-![Shipper dashboard](docs/screenshots/01-shipper-dashboard.png)
-*Shipper view: posted and active freight on the live ops board.*
-
 ![Driver accepting a load](docs/screenshots/02-driver-accept.png)
 *Driver view: eligible freight with one-click accept and status transitions.*
 

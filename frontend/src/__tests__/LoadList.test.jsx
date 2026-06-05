@@ -1,6 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import { LoadList } from '../App'
+import {
+  canFetchSelectedLoadData,
+  createLoadTooltipContent,
+  getBoardLoads,
+} from '../lib/loadVisibility'
 
 const postedLoad = {
   id: 'load-1',
@@ -18,6 +23,15 @@ const assignedLoad = {
   destination_address: 'Atlanta, GA',
   weight_lbs: 26000,
   rate_cents: 315000,
+}
+
+const inTransitLoad = {
+  id: 'load-3',
+  status: 'in_transit',
+  origin_address: 'Overland Park, KS',
+  destination_address: 'Nashville, TN',
+  weight_lbs: 22000,
+  rate_cents: 275000,
 }
 
 function driverActions(load) {
@@ -82,5 +96,41 @@ describe('LoadList', () => {
     )
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  test('driver board keeps assigned freight visible so it can be started', () => {
+    const deliveredLoad = { ...postedLoad, id: 'load-4', status: 'delivered' }
+    const cancelledLoad = { ...postedLoad, id: 'load-5', status: 'cancelled' }
+
+    expect(
+      getBoardLoads({ role: 'driver' }, [
+        postedLoad,
+        assignedLoad,
+        inTransitLoad,
+        deliveredLoad,
+        cancelledLoad,
+      ]).map((load) => load.id)
+    ).toEqual(['load-1', 'load-2', 'load-3'])
+  })
+
+  test('driver skips private data fetches until the load is assigned', () => {
+    expect(canFetchSelectedLoadData({ role: 'driver' }, postedLoad)).toBe(false)
+    expect(canFetchSelectedLoadData({ role: 'driver' }, assignedLoad)).toBe(true)
+    expect(canFetchSelectedLoadData({ role: 'driver' }, inTransitLoad)).toBe(true)
+    expect(canFetchSelectedLoadData({ role: 'shipper' }, postedLoad)).toBe(true)
+  })
+
+  test('map tooltip content treats addresses as text, not HTML', () => {
+    const tooltip = createLoadTooltipContent(
+      {
+        ...postedLoad,
+        origin_address: '<img src=x onerror=alert(1)>',
+      },
+      null
+    )
+
+    expect(tooltip).toBeInstanceOf(HTMLElement)
+    expect(tooltip.textContent).toContain('<img src=x onerror=alert(1)>')
+    expect(tooltip.innerHTML).not.toContain('<img')
   })
 })

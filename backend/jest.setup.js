@@ -13,4 +13,5 @@ jest.mock('./services/s3', () => ({
   isAllowedContentType: jest.requireActual('./services/s3').isAllowedContentType,
   presignPodUpload: jest.fn(),
   presignDocumentDownload: jest.fn(),
+  verifyUploadedDocument: jest.fn(),
 }))

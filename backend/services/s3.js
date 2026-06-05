@@ -1,5 +1,10 @@
 const crypto = require('crypto')
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3')
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+} = require('@aws-sdk/client-s3')
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
 
 const ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'application/pdf'])
@@ -68,10 +73,27 @@ async function presignDocumentDownload({ s3_bucket, s3_key }) {
   })
 }
 
+async function verifyUploadedDocument({ s3_bucket, s3_key, content_type, size_bytes }) {
+  try {
+    const result = await getClient().send(new HeadObjectCommand({
+      Bucket: s3_bucket,
+      Key: s3_key,
+    }))
+
+    return (
+      result.ContentType === content_type &&
+      Number(result.ContentLength) === Number(size_bytes)
+    )
+  } catch {
+    return false
+  }
+}
+
 module.exports = {
   ALLOWED_CONTENT_TYPES,
   MAX_POD_BYTES,
   isAllowedContentType,
   presignPodUpload,
   presignDocumentDownload,
+  verifyUploadedDocument,
 }

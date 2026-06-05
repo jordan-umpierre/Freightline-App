@@ -5,6 +5,12 @@ import './App.css'
 import DocumentList from './components/DocumentList'
 import PodUpload from './components/PodUpload'
 import { exceptionTone } from './lib/exceptionTone'
+import {
+  canFetchSelectedLoadData,
+  createLoadTooltipContent,
+  formatTime,
+  getBoardLoads,
+} from './lib/loadVisibility'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const TOKEN_KEY = 'freightline_token'
@@ -83,16 +89,6 @@ function formatMoney(cents) {
 
 function formatWeight(weight) {
   return `${Number(weight || 0).toLocaleString()} lb`
-}
-
-function formatTime(value) {
-  if (!value) return 'No ping yet'
-
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(new Date(value))
 }
 
 function buildLiveUrl(token) {
@@ -202,7 +198,7 @@ function MapBoard({ loads, liveStatesByLoadId, selectedLoadId, onSelect }) {
         fillColor: liveState?.latest_ping ? exceptionTone(liveState.exceptions) : '#f7c948',
         fillOpacity: 0.95,
       })
-        .bindTooltip(`${load.origin_address} -> ${load.destination_address}<br />Last ping: ${formatTime(liveState?.latest_ping?.recorded_at)}`)
+        .bindTooltip(createLoadTooltipContent(load, liveState))
         .on('click', () => onSelect(load.id))
         .addTo(layer.current)
     })
@@ -734,10 +730,20 @@ function App() {
     setLiveStates(data.live_states)
   }
 
-  async function refreshDocuments(loadId = selectedLoadId, currentToken = token) {
+  async function refreshDocuments(loadId = selectedLoadId, currentToken = token, loadForAccess = selectedLoad) {
     if (!currentToken || !loadId) {
       setDocuments([])
       setDocumentsLoadId('')
+      return
+    }
+
+    const loadToCheck = loadForAccess?.id === loadId
+      ? loadForAccess
+      : loads.find((load) => load.id === loadId)
+
+    if (!canFetchSelectedLoadData(user, loadToCheck)) {
+      setDocuments([])
+      setDocumentsLoadId(loadId)
       return
     }
 
@@ -774,6 +780,8 @@ function App() {
       setLiveStatus('offline')
       setBanner(err.message)
     }
+
+    return loadData.loads
   }
 
   useEffect(() => {
@@ -860,7 +868,7 @@ function App() {
   }, [token, selectedLoadId])
 
   useEffect(() => {
-    if (!token || !selectedLoadId) return
+    if (!token || !selectedLoadId || !canFetchSelectedLoadData(user, selectedLoad)) return
 
     let ignore = false
 
@@ -884,10 +892,10 @@ function App() {
     return () => {
       ignore = true
     }
-  }, [token, selectedLoadId])
+  }, [token, selectedLoadId, selectedLoad, user])
 
   useEffect(() => {
-    if (!token || !selectedLoadId) return
+    if (!token || !selectedLoadId || !canFetchSelectedLoadData(user, selectedLoad)) return
 
     let ignore = false
 
@@ -905,7 +913,7 @@ function App() {
     return () => {
       ignore = true
     }
-  }, [token, selectedLoadId])
+  }, [token, selectedLoadId, selectedLoad, user])
 
   useEffect(() => {
     if (!token) return
@@ -999,17 +1007,25 @@ function App() {
   }
 
   async function reloadAndEvents() {
-    await refreshWorkspace()
+    const refreshedLoads = await refreshWorkspace()
     if (selectedLoadId) {
       const data = await apiRequest(`/loads/${selectedLoadId}/events`, { token })
       setEvents(data.events)
-      try {
-        const pingData = await apiRequest(`/loads/${selectedLoadId}/pings?limit=12`, { token })
-        setPings(pingData.pings)
-      } catch {
+      const refreshedLoad = refreshedLoads?.find((load) => load.id === selectedLoadId) || selectedLoad
+
+      if (canFetchSelectedLoadData(user, refreshedLoad)) {
+        try {
+          const pingData = await apiRequest(`/loads/${selectedLoadId}/pings?limit=12`, { token })
+          setPings(pingData.pings)
+        } catch {
+          setPings([])
+        }
+        await refreshDocuments(selectedLoadId, token, refreshedLoad)
+      } else {
         setPings([])
+        setDocuments([])
+        setDocumentsLoadId(selectedLoadId)
       }
-      await refreshDocuments(selectedLoadId, token)
     }
   }
 
@@ -1059,11 +1075,11 @@ function App() {
     )
   }
 
-  const availableLoads = user?.role === 'driver'
-    ? loads.filter((load) => load.status === 'posted')
-    : loads
+  const boardLoads = getBoardLoads(user, loads)
   const activeLoads = loads.filter((load) => !['delivered', 'cancelled'].includes(load.status))
-  const selectedDocuments = documentsLoadId === selectedLoadId ? documents : []
+  const canShowSelectedPrivateData = canFetchSelectedLoadData(user, selectedLoad)
+  const selectedDocuments = canShowSelectedPrivateData && documentsLoadId === selectedLoadId ? documents : []
+  const selectedPings = canShowSelectedPrivateData ? pings : []
 
   return (
     <main className="app-shell">
@@ -1114,7 +1130,7 @@ function App() {
 
         <LoadList
           title={user?.role === 'driver' ? 'Available and assigned freight' : 'Posted freight'}
-          loads={availableLoads}
+          loads={boardLoads}
           selectedLoadId={selectedLoadId}
           onSelect={setSelectedLoadId}
           actions={(load) => {
@@ -1136,7 +1152,7 @@ function App() {
           token={token}
           load={selectedLoad}
           events={events}
-          pings={pings}
+          pings={selectedPings}
           documents={selectedDocuments}
           onChanged={reloadAndEvents}
           onDocumentsChanged={reloadAndEvents}

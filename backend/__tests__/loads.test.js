@@ -167,6 +167,42 @@ test('drivers can accept an eligible posted load', async () => {
   expect(response.body.load).toMatchObject(acceptedLoad)
 })
 
+test('assignment locks load and vehicle rows before assigning', async () => {
+  const client = mockTransaction([
+    {
+      rows: [{
+        id: 'load-1',
+        status: 'posted',
+        weight_lbs: 18000,
+        oversized: false,
+        origin_lat: 39.099724,
+        origin_lng: -94.578331,
+      }],
+    },
+    {
+      rows: [{
+        id: 'vehicle-1',
+        driver_id: 'driver-1',
+        status: 'available',
+        capacity_lbs: 45000,
+        oversized: false,
+      }],
+    },
+    { rows: [{ id: 'load-1', status: 'assigned' }] },
+    { rows: [] },
+    { rows: [] },
+  ])
+
+  const response = await request(app)
+    .post('/loads/load-1/assign')
+    .set('Authorization', auth('driver'))
+    .send({ vehicle_id: 'vehicle-1' })
+
+  expect(response.status).toBe(200)
+  expect(client.query.mock.calls[1][0]).toMatch(/FOR UPDATE/i)
+  expect(client.query.mock.calls[2][0]).toMatch(/FOR UPDATE/i)
+})
+
 test('drivers cannot skip status transitions', async () => {
   mockTransaction([
     {

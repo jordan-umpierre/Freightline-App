@@ -367,7 +367,10 @@ router.patch('/:id', authorize(['shipper']), async (req, res) => {
 router.post('/:id/assign', authorize(['driver']), async (req, res) => {
   try {
     const assigned = await withTransaction(async (client) => {
-      const loadResult = await client.query('SELECT * FROM loads WHERE id = $1', [req.params.id])
+      const loadResult = await client.query(
+        'SELECT * FROM loads WHERE id = $1 FOR UPDATE',
+        [req.params.id]
+      )
       const load = loadResult.rows[0]
 
       if (!load) return { status: 404, body: { error: 'Load not found' } }
@@ -380,11 +383,12 @@ router.post('/:id/assign', authorize(['driver']), async (req, res) => {
         : [req.user.user_id]
 
       const vehicleSql = req.body.vehicle_id
-        ? `SELECT * FROM vehicles WHERE id = $1 AND driver_id = $2`
+        ? `SELECT * FROM vehicles WHERE id = $1 AND driver_id = $2 FOR UPDATE`
         : `SELECT * FROM vehicles
            WHERE driver_id = $1 AND status = 'available'
            ORDER BY created_at DESC
-           LIMIT 1`
+           LIMIT 1
+           FOR UPDATE`
 
       const vehicleResult = await client.query(vehicleSql, vehicleParams)
       const vehicle = vehicleResult.rows[0]
@@ -403,10 +407,14 @@ router.post('/:id/assign', authorize(['driver']), async (req, res) => {
       const updateResult = await client.query(
         `UPDATE loads
          SET vehicle_id = $1, status = 'assigned', updated_at = NOW()
-         WHERE id = $2
+         WHERE id = $2 AND status = 'posted'
          RETURNING *`,
         [vehicle.id, load.id]
       )
+
+      if (updateResult.rowCount === 0) {
+        return { status: 409, body: { error: 'Only posted loads can be assigned' } }
+      }
 
       await client.query(
         `UPDATE vehicles

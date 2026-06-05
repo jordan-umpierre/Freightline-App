@@ -144,10 +144,20 @@ describe('POST /loads/:id/documents/:doc_id/confirm', () => {
   test('confirm flips the row to uploaded and inserts a pod_uploaded event', async () => {
     pool.query
       .mockResolvedValueOnce({
-        rows: [{ id: 'doc-1', uploaded_by: 'driver-1', status: 'pending', load_id: 'load-1' }],
+        rows: [{
+          id: 'doc-1',
+          uploaded_by: 'driver-1',
+          status: 'pending',
+          load_id: 'load-1',
+          s3_bucket: 'test-bucket',
+          s3_key: 'pod/load-1/doc-1',
+          content_type: 'image/jpeg',
+          size_bytes: 5000,
+        }],
       })
       .mockResolvedValueOnce({ rows: [{ id: 'doc-1', status: 'uploaded' }] })
       .mockResolvedValueOnce({ rows: [] })
+    s3.verifyUploadedDocument.mockResolvedValueOnce(true)
 
     const response = await request(app)
       .post('/loads/load-1/documents/doc-1/confirm')
@@ -164,6 +174,37 @@ describe('POST /loads/:id/documents/:doc_id/confirm', () => {
     const eventCall = pool.query.mock.calls[2]
     expect(eventCall[0]).toMatch(/INSERT INTO load_events/)
     expect(eventCall[1]).toEqual(expect.arrayContaining(['load-1', 'driver-1', 'POD uploaded']))
+    expect(s3.verifyUploadedDocument).toHaveBeenCalledWith({
+      s3_bucket: 'test-bucket',
+      s3_key: 'pod/load-1/doc-1',
+      content_type: 'image/jpeg',
+      size_bytes: 5000,
+    })
+  })
+
+  test('confirm rejects a pending document when S3 metadata does not match', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{
+        id: 'doc-1',
+        uploaded_by: 'driver-1',
+        status: 'pending',
+        load_id: 'load-1',
+        s3_bucket: 'test-bucket',
+        s3_key: 'pod/load-1/doc-1',
+        content_type: 'image/jpeg',
+        size_bytes: 5000,
+      }],
+    })
+    s3.verifyUploadedDocument.mockResolvedValueOnce(false)
+
+    const response = await request(app)
+      .post('/loads/load-1/documents/doc-1/confirm')
+      .set('Authorization', auth('driver'))
+      .send({})
+
+    expect(response.status).toBe(409)
+    expect(response.body.error).toMatch(/does not match/i)
+    expect(pool.query).toHaveBeenCalledTimes(1)
   })
 
   test('confirming an already-uploaded document is idempotent', async () => {

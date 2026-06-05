@@ -603,4 +603,62 @@ tbody tr:hover,
   .map-canvas {
     height: 300px;
   }
+
+  .table-wrap {
+    overflow: visible;
+  }
+
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+    width: 100%;
+  }
+
+  table {
+    min-width: 0;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  tbody tr {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--field);
+    padding: 10px;
+  }
+
+  tbody tr:hover,
+  .selected-row {
+    background: rgba(31, 122, 92, 0.08);
+  }
+
+  td {
+    border-bottom: 0;
+    padding: 6px 0;
+  }
+
+  td + td {
+    border-top: 1px solid var(--border);
+  }
+
+  td:last-child {
+    border-top: 0;
+    padding-bottom: 0;
+  }
+
+  .table-action {
+    width: 100%;
+    margin-top: 6px;
+  }
 }
