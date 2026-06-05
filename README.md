@@ -128,11 +128,14 @@ npm run simulate:pings
 npm run simulate:pings -- --off-route
 ```
 
+If your terminal prompt already ends in `Freightline-App\backend`, skip the
+`cd backend` line.
+
 To point the simulator at the deployed Railway API:
 
 ```bash
 cd backend
-API_URL=https://freightline-app-production.up.railway.app npm run simulate:pings -- --off-route
+npm run simulate:pings -- --api https://freightline-app-production.up.railway.app --off-route
 ```
 
 ## Quality Checks

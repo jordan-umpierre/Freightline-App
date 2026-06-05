@@ -78,7 +78,7 @@ The next hardest part was keeping the demo credible. A broken live link or stale
 
 ```bash
 cd backend
-API_URL=https://freightline-app-production.up.railway.app npm run simulate:pings -- --off-route
+npm run simulate:pings -- --api https://freightline-app-production.up.railway.app --off-route
 ```
 
 ## Key File Paths

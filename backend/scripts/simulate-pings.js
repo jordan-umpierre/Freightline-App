@@ -32,14 +32,25 @@ function sleep(ms) {
 }
 
 async function apiRequest(apiBase, path, { method = 'GET', token, body } = {}) {
-  const response = await fetch(`${apiBase}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  let response
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    })
+  } catch (err) {
+    // The simulator is often run from demo terminals, so explain setup instead of
+    // surfacing Node's opaque "fetch failed" network error.
+    throw new Error(
+      `Could not reach API at ${apiBase}. ` +
+      'Make sure the backend is running. Use --api to point at a running local or deployed backend. ' +
+      'Example: npm run simulate:pings -- --api https://freightline-app-production.up.railway.app --off-route'
+    )
+  }
 
   const text = await response.text()
   const data = text ? JSON.parse(text) : {}
