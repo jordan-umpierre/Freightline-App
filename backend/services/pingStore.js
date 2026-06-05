@@ -99,10 +99,8 @@ async function getLatestPingsByLoadIds(loadIds) {
 }
 
 module.exports = {
-  ensurePingIndexes,
   getLatestPingsByLoadIds,
   getPingsForLoad,
   insertPing,
   selectLatestPingByLoadId,
-  serializePing,
 }

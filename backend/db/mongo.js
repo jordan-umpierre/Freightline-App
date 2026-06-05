@@ -30,7 +30,6 @@ async function closeMongo() {
 }
 
 module.exports = {
-  closeMongo,
   getMongoDb,
   getPingCollection,
 }

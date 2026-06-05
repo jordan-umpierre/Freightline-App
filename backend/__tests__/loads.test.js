@@ -1,35 +1,23 @@
-const jwt = require('jsonwebtoken')
 const request = require('supertest')
+const { auth, mockTransaction: mockTransactionWithPool } = require('../testHelpers')
 
 jest.mock('../db/pool', () => ({
   query: jest.fn(),
   connect: jest.fn(),
 }))
 
-process.env.JWT_SECRET = 'test-secret'
-
 const pool = require('../db/pool')
 const app = require('../app')
 
-function auth(role, userId = `${role}-1`) {
-  const token = jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET)
-  return `Bearer ${token}`
+function mockTransaction(responses) {
+  return mockTransactionWithPool(pool, responses)
 }
 
-function mockTransaction(responses) {
-  const client = {
-    query: jest.fn((sql) => {
-      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
-        return Promise.resolve({ rows: [] })
-      }
-
-      return Promise.resolve(responses.shift() || { rows: [] })
-    }),
-    release: jest.fn(),
-  }
-
-  pool.connect.mockResolvedValueOnce(client)
-  return client
+function assignLoadRequest() {
+  return request(app)
+    .post('/loads/load-1/assign')
+    .set('Authorization', auth('driver'))
+    .send({ vehicle_id: 'vehicle-1' })
 }
 
 beforeEach(() => {
@@ -117,10 +105,7 @@ test('assignment rejects a vehicle that cannot carry the load', async () => {
     },
   ])
 
-  const response = await request(app)
-    .post('/loads/load-1/assign')
-    .set('Authorization', auth('driver'))
-    .send({ vehicle_id: 'vehicle-1' })
+  const response = await assignLoadRequest()
 
   expect(response.status).toBe(409)
   expect(response.body.error).toBe('Vehicle capacity is too low for this load')
@@ -158,10 +143,7 @@ test('drivers can accept an eligible posted load', async () => {
     { rows: [] },
   ])
 
-  const response = await request(app)
-    .post('/loads/load-1/assign')
-    .set('Authorization', auth('driver'))
-    .send({ vehicle_id: 'vehicle-1' })
+  const response = await assignLoadRequest()
 
   expect(response.status).toBe(200)
   expect(response.body.load).toMatchObject(acceptedLoad)
@@ -193,10 +175,7 @@ test('assignment locks load and vehicle rows before assigning', async () => {
     { rows: [] },
   ])
 
-  const response = await request(app)
-    .post('/loads/load-1/assign')
-    .set('Authorization', auth('driver'))
-    .send({ vehicle_id: 'vehicle-1' })
+  const response = await assignLoadRequest()
 
   expect(response.status).toBe(200)
   expect(client.query.mock.calls[1][0]).toMatch(/FOR UPDATE/i)

@@ -90,7 +90,6 @@ async function verifyUploadedDocument({ s3_bucket, s3_key, content_type, size_by
 }
 
 module.exports = {
-  ALLOWED_CONTENT_TYPES,
   MAX_POD_BYTES,
   isAllowedContentType,
   presignPodUpload,

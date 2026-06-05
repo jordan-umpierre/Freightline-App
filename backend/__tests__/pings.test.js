@@ -1,5 +1,5 @@
-const jwt = require('jsonwebtoken')
 const request = require('supertest')
+const { assignedLoad, auth } = require('../testHelpers')
 
 jest.mock('../db/pool', () => ({
   query: jest.fn(),
@@ -12,29 +12,15 @@ jest.mock('../services/pingStore', () => ({
   insertPing: jest.fn(),
 }))
 
-process.env.JWT_SECRET = 'test-secret'
-
 const pool = require('../db/pool')
 const pingStore = require('../services/pingStore')
 const app = require('../app')
 
-function auth(role, userId = `${role}-1`) {
-  return `Bearer ${jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET)}`
-}
-
-function assignedLoad(overrides = {}) {
-  return {
-    id: 'load-1',
-    shipper_id: 'shipper-1',
-    vehicle_id: 'vehicle-1',
-    driver_id: 'driver-1',
-    status: 'in_transit',
-    origin_lat: 39.099724,
-    origin_lng: -94.578331,
-    destination_lat: 32.776665,
-    destination_lng: -96.796989,
-    ...overrides,
-  }
+function postPingAs(role, body = { latitude: 39, longitude: -94 }) {
+  return request(app)
+    .post('/loads/load-1/pings')
+    .set('Authorization', auth(role))
+    .send(body)
 }
 
 beforeEach(() => {
@@ -62,10 +48,7 @@ test('ping endpoint rejects a bad token', async () => {
 })
 
 test('shippers cannot post GPS pings', async () => {
-  const response = await request(app)
-    .post('/loads/load-1/pings')
-    .set('Authorization', auth('shipper'))
-    .send({ latitude: 39, longitude: -94 })
+  const response = await postPingAs('shipper')
 
   expect(response.status).toBe(403)
   expect(response.body.error).toBe('Forbidden')
@@ -76,10 +59,7 @@ test('drivers cannot post pings for unassigned loads', async () => {
     rows: [assignedLoad({ driver_id: 'other-driver' })],
   })
 
-  const response = await request(app)
-    .post('/loads/load-1/pings')
-    .set('Authorization', auth('driver'))
-    .send({ latitude: 39, longitude: -94 })
+  const response = await postPingAs('driver')
 
   expect(response.status).toBe(403)
   expect(response.body.error).toBe('Forbidden')

@@ -5,6 +5,7 @@ const { buildExceptions } = require('../services/geo')
 const { getPingsForLoad, insertPing } = require('../services/pingStore')
 const {
   buildLiveStatesForLoads,
+  getLoadWithDriver,
   getLiveLoadsForUser,
   getPingTargetLoad,
   getTrackingLoadForUser,
@@ -78,15 +79,7 @@ async function withTransaction(callback) {
 }
 
 async function loadVisibleToUser(loadId, user) {
-  const result = await pool.query(
-    `SELECT l.*, v.driver_id
-     FROM loads l
-     LEFT JOIN vehicles v ON v.id = l.vehicle_id
-     WHERE l.id = $1`,
-    [loadId]
-  )
-
-  const load = result.rows[0]
+  const load = await getLoadWithDriver(loadId)
   if (!load) return null
 
   const isShipperOwner = user.role === 'shipper' && load.shipper_id === user.user_id
@@ -94,6 +87,90 @@ async function loadVisibleToUser(loadId, user) {
   const isAssignedDriver = user.role === 'driver' && load.driver_id === user.user_id
 
   return isShipperOwner || isPostedForDriver || isAssignedDriver ? load : false
+}
+
+function sendLoadAccessError(res, load) {
+  if (load === null) {
+    res.status(404).json({ error: 'Load not found' })
+    return true
+  }
+
+  if (load === false) {
+    res.status(403).json({ error: 'Forbidden' })
+    return true
+  }
+
+  return false
+}
+
+function validatePatchStatus(status) {
+  if (status && status !== 'cancelled' && status !== 'posted') {
+    return 'Shippers can only cancel posted loads'
+  }
+
+  return null
+}
+
+function parsePositiveField(field, rawValue) {
+  const value = toPositiveInteger(rawValue)
+  return value ? { value } : { error: `${field} must be a positive integer` }
+}
+
+function parseLatitudeField(field, rawValue) {
+  const value = toCoordinate(rawValue, -90, 90)
+  return value === null ? { error: `${field} must be a valid latitude` } : { value }
+}
+
+function parseLongitudeField(field, rawValue) {
+  const value = toCoordinate(rawValue, -180, 180)
+  return value === null ? { error: `${field} must be a valid longitude` } : { value }
+}
+
+function parseTextField(_field, rawValue) {
+  return { value: typeof rawValue === 'string' ? rawValue.trim() : rawValue }
+}
+
+function parseOversizedField(_field, rawValue) {
+  // Boolean(rawValue) would coerce the string "false" to true, so compare explicitly.
+  return { value: rawValue === true || rawValue === 'true' }
+}
+
+const EDITABLE_FIELD_PARSERS = {
+  destination_address: parseTextField,
+  destination_lat: parseLatitudeField,
+  destination_lng: parseLongitudeField,
+  origin_address: parseTextField,
+  origin_lat: parseLatitudeField,
+  origin_lng: parseLongitudeField,
+  oversized: parseOversizedField,
+  rate_cents: parsePositiveField,
+  weight_lbs: parsePositiveField,
+}
+
+function parseEditableValue(field, rawValue) {
+  return EDITABLE_FIELD_PARSERS[field](field, rawValue)
+}
+
+function buildLoadUpdates(body) {
+  const updates = []
+  const values = []
+
+  for (const field of EDITABLE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(body, field)) continue
+
+    const parsed = parseEditableValue(field, body[field])
+    if (parsed.error) return { error: parsed.error }
+
+    values.push(parsed.value)
+    updates.push(`${field} = $${values.length}`)
+  }
+
+  if (body.status === 'cancelled') {
+    values.push('cancelled')
+    updates.push(`status = $${values.length}`)
+  }
+
+  return { updates, values }
 }
 
 router.use(authenticate)
@@ -198,8 +275,7 @@ router.post('/', authorize(['shipper']), async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const load = await loadVisibleToUser(req.params.id, req.user)
-    if (load === null) return res.status(404).json({ error: 'Load not found' })
-    if (load === false) return res.status(403).json({ error: 'Forbidden' })
+    if (sendLoadAccessError(res, load)) return
 
     res.json({ load })
   } catch (err) {
@@ -261,9 +337,7 @@ router.post('/:id/pings', authorize(['driver']), async (req, res) => {
 router.get('/:id/pings', async (req, res) => {
   try {
     const load = await getTrackingLoadForUser(req.params.id, req.user)
-
-    if (load === null) return res.status(404).json({ error: 'Load not found' })
-    if (load === false) return res.status(403).json({ error: 'Forbidden' })
+    if (sendLoadAccessError(res, load)) return
 
     const pings = await getPingsForLoad(req.params.id, req.query.limit)
     res.json({ pings })
@@ -286,45 +360,11 @@ router.patch('/:id', authorize(['shipper']), async (req, res) => {
       return res.status(409).json({ error: 'Only posted loads can be edited or cancelled' })
     }
 
-    if (req.body.status && req.body.status !== 'cancelled' && req.body.status !== 'posted') {
-      return res.status(400).json({ error: 'Shippers can only cancel posted loads' })
-    }
+    const statusError = validatePatchStatus(req.body.status)
+    if (statusError) return res.status(400).json({ error: statusError })
 
-    const updates = []
-    const values = []
-
-    for (const field of EDITABLE_FIELDS) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
-        let value = req.body[field]
-
-        if (field === 'weight_lbs' || field === 'rate_cents') {
-          value = toPositiveInteger(value)
-          if (!value) return res.status(400).json({ error: `${field} must be a positive integer` })
-        }
-
-        if (field.endsWith('_lat')) {
-          value = toCoordinate(value, -90, 90)
-          if (value === null) return res.status(400).json({ error: `${field} must be a valid latitude` })
-        }
-
-        if (field.endsWith('_lng')) {
-          value = toCoordinate(value, -180, 180)
-          if (value === null) return res.status(400).json({ error: `${field} must be a valid longitude` })
-        }
-
-        if (typeof value === 'string') value = value.trim()
-        // Boolean(value) would coerce the string "false" to true, so compare explicitly
-        if (field === 'oversized') value = value === true || value === 'true'
-
-        values.push(value)
-        updates.push(`${field} = $${values.length}`)
-      }
-    }
-
-    if (req.body.status === 'cancelled') {
-      values.push('cancelled')
-      updates.push(`status = $${values.length}`)
-    }
+    const { error, updates, values } = buildLoadUpdates(req.body)
+    if (error) return res.status(400).json({ error })
 
     if (updates.length === 0) return res.json({ load })
 
@@ -521,8 +561,7 @@ router.patch('/:id/status', authorize(['driver']), async (req, res) => {
 router.get('/:id/events', async (req, res) => {
   try {
     const load = await loadVisibleToUser(req.params.id, req.user)
-    if (load === null) return res.status(404).json({ error: 'Load not found' })
-    if (load === false) return res.status(403).json({ error: 'Forbidden' })
+    if (sendLoadAccessError(res, load)) return
 
     const result = await pool.query(
       `SELECT e.*, u.first_name, u.last_name, u.role

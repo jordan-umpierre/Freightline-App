@@ -1,20 +1,17 @@
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const request = require('supertest')
+// Jest needs this suite-local mock before app is required.
+// fallow-ignore-next-line code-duplication
+const { tokenFor } = require('../testHelpers')
 
 jest.mock('../db/pool', () => ({
   query: jest.fn(),
   connect: jest.fn(),
 }))
 
-process.env.JWT_SECRET = 'test-secret'
-
 const pool = require('../db/pool')
 const app = require('../app')
-
-function tokenFor(userId, role) {
-  return jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET)
-}
 
 beforeEach(() => {
   jest.clearAllMocks()

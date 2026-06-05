@@ -34,7 +34,7 @@ async function getLiveLoadsForUser(user) {
   return []
 }
 
-async function getTrackingLoadForUser(loadId, user) {
+async function getLoadWithDriver(loadId) {
   const result = await pool.query(
     `SELECT l.*, v.driver_id
      FROM loads l
@@ -43,7 +43,11 @@ async function getTrackingLoadForUser(loadId, user) {
     [loadId]
   )
 
-  const load = result.rows[0]
+  return result.rows[0] || null
+}
+
+async function getTrackingLoadForUser(loadId, user) {
+  const load = await getLoadWithDriver(loadId)
   if (!load) return null
 
   const isShipperOwner = user.role === 'shipper' && load.shipper_id === user.user_id
@@ -75,8 +79,8 @@ async function buildLiveStatesForLoads(loads, now = new Date()) {
 }
 
 module.exports = {
-  ACTIVE_LOAD_STATUSES,
   buildLiveStatesForLoads,
+  getLoadWithDriver,
   getLiveLoadsForUser,
   getPingTargetLoad,
   getTrackingLoadForUser,

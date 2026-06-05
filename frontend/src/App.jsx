@@ -398,11 +398,19 @@ function LoadForm({ token, onCreated }) {
         Oversized
       </label>
 
-      {error && <p className="form-error">{error}</p>}
+      <FormError message={error} />
 
-      <button className="primary-action" disabled={busy}>{busy ? 'Posting...' : 'Post load'}</button>
+      <BusyButton busy={busy} busyLabel="Posting..." label="Post load" />
     </form>
   )
+}
+
+function FormError({ message }) {
+  return message ? <p className="form-error">{message}</p> : null
+}
+
+function BusyButton({ busy, busyLabel, label }) {
+  return <button className="primary-action" disabled={busy}>{busy ? busyLabel : label}</button>
 }
 
 function VehiclePanel({ token, vehicles, onCreated }) {
@@ -460,8 +468,8 @@ function VehiclePanel({ token, vehicles, onCreated }) {
           <input type="checkbox" checked={oversized} onChange={(event) => setOversized(event.target.checked)} />
           Oversized capable
         </label>
-        {error && <p className="form-error">{error}</p>}
-        <button className="primary-action" disabled={busy}>{busy ? 'Saving...' : 'Register truck'}</button>
+        <FormError message={error} />
+        <BusyButton busy={busy} busyLabel="Saving..." label="Register truck" />
       </form>
 
       <div className="compact-list">

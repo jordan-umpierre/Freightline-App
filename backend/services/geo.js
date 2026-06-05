@@ -109,9 +109,6 @@ function buildExceptions(load, latestPing, now = new Date()) {
 }
 
 module.exports = {
-  OFF_ROUTE_MILES,
-  STALE_LOCATION_MINUTES,
   buildExceptions,
   distancePointToRouteMiles,
-  haversineMiles,
 }

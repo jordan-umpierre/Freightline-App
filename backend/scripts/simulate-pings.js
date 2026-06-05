@@ -10,16 +10,28 @@ const DEFAULTS = {
 
 function parseArgs(argv) {
   const options = { ...DEFAULTS, offRoute: false }
+  const valueOptions = {
+    '--api': 'api',
+    '--email': 'email',
+    '--password': 'password',
+    '--interval-ms': 'intervalMs',
+    '--steps': 'steps',
+  }
+  const numericOptions = new Set(['intervalMs', 'steps'])
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
 
-    if (arg === '--off-route') options.offRoute = true
-    if (arg === '--api') options.api = argv[index += 1]
-    if (arg === '--email') options.email = argv[index += 1]
-    if (arg === '--password') options.password = argv[index += 1]
-    if (arg === '--interval-ms') options.intervalMs = Number(argv[index += 1])
-    if (arg === '--steps') options.steps = Number(argv[index += 1])
+    if (arg === '--off-route') {
+      options.offRoute = true
+      continue
+    }
+
+    const optionName = valueOptions[arg]
+    if (!optionName) continue
+
+    const value = argv[index += 1]
+    options[optionName] = numericOptions.has(optionName) ? Number(value) : value
   }
 
   return options
@@ -102,35 +114,41 @@ async function findOrAssignLoad(apiBase, token) {
   return assigned.load
 }
 
-async function run() {
-  const options = parseArgs(process.argv.slice(2))
-
+function validateOptions(options) {
   if (!Number.isFinite(options.intervalMs) || options.intervalMs < 100) {
     throw new Error('--interval-ms must be at least 100')
   }
   if (!Number.isInteger(options.steps) || options.steps < 2) {
     throw new Error('--steps must be an integer greater than 1')
   }
+}
 
-  const login = await apiRequest(options.api, '/auth/login', {
+async function loginDriver(options) {
+  const result = await apiRequest(options.api, '/auth/login', {
     method: 'POST',
     body: {
       email: options.email,
       password: options.password,
     },
   })
-  const token = login.token
-  let load = await findOrAssignLoad(options.api, token)
 
+  return result.token
+}
+
+async function ensureLoadInTransit(apiBase, token, load) {
   if (load.status === 'assigned') {
-    const updated = await apiRequest(options.api, `/loads/${load.id}/status`, {
+    const updated = await apiRequest(apiBase, `/loads/${load.id}/status`, {
       method: 'PATCH',
       token,
       body: { status: 'in_transit' },
     })
-    load = updated.load
+    return updated.load
   }
 
+  return load
+}
+
+async function sendPingSequence(options, token, load) {
   console.log(`Simulating ${options.steps} pings for ${load.origin_address} -> ${load.destination_address}`)
   console.log(`Mode: ${options.offRoute ? 'off-route demo' : 'normal route'}`)
 
@@ -154,7 +172,27 @@ async function run() {
   }
 }
 
-run().catch((err) => {
-  console.error(err.message)
-  process.exit(1)
-})
+async function run() {
+  const options = parseArgs(process.argv.slice(2))
+  validateOptions(options)
+
+  const token = await loginDriver(options)
+  const assignedLoad = await findOrAssignLoad(options.api, token)
+  const load = await ensureLoadInTransit(options.api, token, assignedLoad)
+
+  await sendPingSequence(options, token, load)
+}
+
+if (require.main === module) {
+  run().catch((err) => {
+    console.error(err.message)
+    process.exit(1)
+  })
+}
+
+module.exports = {
+  apiRequest,
+  buildPing,
+  parseArgs,
+  validateOptions,
+}

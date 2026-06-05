@@ -1,30 +1,27 @@
-const jwt = require('jsonwebtoken')
 const request = require('supertest')
+const { assignedLoad, auth } = require('../testHelpers')
 
 jest.mock('../db/pool', () => ({
   query: jest.fn(),
   connect: jest.fn(),
 }))
 
-process.env.JWT_SECRET = 'test-secret'
-
 const pool = require('../db/pool')
 const s3 = require('../services/s3')
 const app = require('../app')
 
-function auth(role, userId = `${role}-1`) {
-  return `Bearer ${jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET)}`
+function podUploadRequest({ role = 'driver', body = { content_type: 'image/jpeg', size_bytes: 100 } } = {}) {
+  return request(app)
+    .post('/loads/load-1/documents/pod-upload-url')
+    .set('Authorization', auth(role))
+    .send(body)
 }
 
-function assignedLoad(overrides = {}) {
-  return {
-    id: 'load-1',
-    shipper_id: 'shipper-1',
-    vehicle_id: 'vehicle-1',
-    driver_id: 'driver-1',
-    status: 'in_transit',
-    ...overrides,
-  }
+function confirmPodRequest(role = 'driver') {
+  return request(app)
+    .post('/loads/load-1/documents/doc-1/confirm')
+    .set('Authorization', auth(role))
+    .send({})
 }
 
 beforeEach(() => {
@@ -33,10 +30,7 @@ beforeEach(() => {
 
 describe('POST /loads/:id/documents/pod-upload-url', () => {
   test('shippers cannot request a POD upload URL', async () => {
-    const response = await request(app)
-      .post('/loads/load-1/documents/pod-upload-url')
-      .set('Authorization', auth('shipper'))
-      .send({ content_type: 'image/jpeg', size_bytes: 100 })
+    const response = await podUploadRequest({ role: 'shipper' })
 
     expect(response.status).toBe(403)
   })
@@ -44,10 +38,7 @@ describe('POST /loads/:id/documents/pod-upload-url', () => {
   test('drivers not assigned to the load are rejected', async () => {
     pool.query.mockResolvedValueOnce({ rows: [assignedLoad({ driver_id: 'other-driver' })] })
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/pod-upload-url')
-      .set('Authorization', auth('driver'))
-      .send({ content_type: 'image/jpeg', size_bytes: 100 })
+    const response = await podUploadRequest()
 
     expect(response.status).toBe(403)
   })
@@ -55,10 +46,7 @@ describe('POST /loads/:id/documents/pod-upload-url', () => {
   test('drivers cannot request POD URL for a posted load', async () => {
     pool.query.mockResolvedValueOnce({ rows: [assignedLoad({ status: 'posted' })] })
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/pod-upload-url')
-      .set('Authorization', auth('driver'))
-      .send({ content_type: 'image/jpeg', size_bytes: 100 })
+    const response = await podUploadRequest()
 
     expect(response.status).toBe(409)
     expect(response.body.error).toMatch(/in_transit or delivered/i)
@@ -67,10 +55,7 @@ describe('POST /loads/:id/documents/pod-upload-url', () => {
   test('rejects disallowed content types', async () => {
     pool.query.mockResolvedValueOnce({ rows: [assignedLoad()] })
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/pod-upload-url')
-      .set('Authorization', auth('driver'))
-      .send({ content_type: 'image/gif', size_bytes: 100 })
+    const response = await podUploadRequest({ body: { content_type: 'image/gif', size_bytes: 100 } })
 
     expect(response.status).toBe(400)
     expect(response.body.error).toMatch(/content_type/)
@@ -79,10 +64,7 @@ describe('POST /loads/:id/documents/pod-upload-url', () => {
   test('rejects size_bytes over the 10 MB limit', async () => {
     pool.query.mockResolvedValueOnce({ rows: [assignedLoad()] })
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/pod-upload-url')
-      .set('Authorization', auth('driver'))
-      .send({ content_type: 'image/jpeg', size_bytes: 11 * 1024 * 1024 })
+    const response = await podUploadRequest({ body: { content_type: 'image/jpeg', size_bytes: 11 * 1024 * 1024 } })
 
     expect(response.status).toBe(400)
     expect(response.body.error).toMatch(/size_bytes/)
@@ -99,10 +81,7 @@ describe('POST /loads/:id/documents/pod-upload-url', () => {
       s3_bucket: 'test-bucket',
     })
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/pod-upload-url')
-      .set('Authorization', auth('driver'))
-      .send({ content_type: 'image/jpeg', size_bytes: 5000 })
+    const response = await podUploadRequest({ body: { content_type: 'image/jpeg', size_bytes: 5000 } })
 
     expect(response.status).toBe(201)
     expect(response.body).toMatchObject({
@@ -120,10 +99,7 @@ describe('POST /loads/:id/documents/pod-upload-url', () => {
 
 describe('POST /loads/:id/documents/:doc_id/confirm', () => {
   test('shippers cannot confirm uploads', async () => {
-    const response = await request(app)
-      .post('/loads/load-1/documents/doc-1/confirm')
-      .set('Authorization', auth('shipper'))
-      .send({})
+    const response = await confirmPodRequest('shipper')
 
     expect(response.status).toBe(403)
   })
@@ -133,10 +109,7 @@ describe('POST /loads/:id/documents/:doc_id/confirm', () => {
       rows: [{ id: 'doc-1', uploaded_by: 'other-driver', status: 'pending', load_id: 'load-1' }],
     })
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/doc-1/confirm')
-      .set('Authorization', auth('driver'))
-      .send({})
+    const response = await confirmPodRequest()
 
     expect(response.status).toBe(403)
   })
@@ -197,10 +170,7 @@ describe('POST /loads/:id/documents/:doc_id/confirm', () => {
     })
     s3.verifyUploadedDocument.mockResolvedValueOnce(false)
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/doc-1/confirm')
-      .set('Authorization', auth('driver'))
-      .send({})
+    const response = await confirmPodRequest()
 
     expect(response.status).toBe(409)
     expect(response.body.error).toMatch(/does not match/i)
@@ -212,10 +182,7 @@ describe('POST /loads/:id/documents/:doc_id/confirm', () => {
       rows: [{ id: 'doc-1', uploaded_by: 'driver-1', status: 'uploaded', load_id: 'load-1' }],
     })
 
-    const response = await request(app)
-      .post('/loads/load-1/documents/doc-1/confirm')
-      .set('Authorization', auth('driver'))
-      .send({})
+    const response = await confirmPodRequest()
 
     expect(response.status).toBe(200)
     expect(response.body.document.status).toBe('uploaded')
